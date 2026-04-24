@@ -1,0 +1,148 @@
+﻿@page "/productos"
+@using GymPOS.Models
+@using GymPOS.Services
+@inject ProductoService ProductoService
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+<h3>Productos</h3>
+
+<button class="btn btn-primary mb-3" @onclick="NuevoProducto">+ Nuevo Producto</button>
+
+@if (productos == null)
+{
+    <p>Cargando...</p>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Código Barra</th>
+                <th>Precio</th>
+                <th>Stock</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var p in productos)
+            {
+                <tr>
+                    <td>@p.Nombre</td>
+                    <td>@p.CodigoBarra</td>
+                    <td>₡@p.Precio.ToString("N0")</td>
+                    <td>@p.Stock</td>
+                    <td>
+                        <button class="btn btn-sm btn-warning" @onclick="() => Editar(p)">Editar</button>
+                        <button class="btn btn-sm btn-danger" @onclick="() => Eliminar(p.Id)">Eliminar</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@if (mostrarFormulario)
+{
+    <div class="card p-3 mt-3">
+        <h5>@(productoActual.Id == 0 ? "Nuevo Producto" : "Editar Producto")</h5>
+
+        <div class="mb-2">
+            <label>Tipo</label>
+            <input class="form-control" @bind="productoActual.Tipo" />
+        </div>
+        <div class="mb-2">
+            <label>Marca</label>
+            <input class="form-control" @bind="productoActual.Marca" />
+        </div>
+        <div class="mb-2">
+            <label>Descripción</label>
+            <input class="form-control" @bind="productoActual.Descripcion" />
+        </div>
+        <div class="mb-2">
+            <label>Capacidad</label>
+            <input class="form-control" @bind="productoActual.Capacidad" />
+        </div>
+        <div class="mb-2">
+            <label>Código de Barra</label>
+            <input class="form-control" @bind="productoActual.CodigoBarra" />
+        </div>
+        <div class="mb-2">
+            <label>Precio (₡)</label>
+            <input class="form-control" type="number" @bind="productoActual.Precio" />
+        </div>
+        <div class="mb-2">
+            <label>Stock</label>
+            <input class="form-control" type="number" @bind="productoActual.Stock" />
+        </div>
+        <div class="mb-2">
+            <label>Stock Mínimo</label>
+            <input class="form-control" type="number" @bind="productoActual.StockMinimo" />
+        </div>
+
+        <button class="btn btn-success" @onclick="Guardar">Guardar</button>
+        <button class="btn btn-secondary ms-2" @onclick="Cancelar">Cancelar</button>
+    </div>
+}
+
+@code {
+    private List<Producto>? productos;
+    private Producto productoActual = new();
+    private bool mostrarFormulario = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarProductos();
+    }
+
+    private async Task CargarProductos()
+    {
+        productos = await ProductoService.GetAllAsync();
+    }
+
+    private void NuevoProducto()
+    {
+        productoActual = new Producto();
+        mostrarFormulario = true;
+    }
+
+    private void Editar(Producto p)
+    {
+        productoActual = new Producto
+        {
+            Id = p.Id,
+            Tipo = p.Tipo,
+            Marca = p.Marca,
+            Descripcion = p.Descripcion,
+            Capacidad = p.Capacidad,
+            CodigoBarra = p.CodigoBarra,
+            Precio = p.Precio,
+            Stock = p.Stock,
+            StockMinimo = p.StockMinimo
+        };
+        mostrarFormulario = true;
+    }
+
+    private async Task Guardar()
+    {
+        if (productoActual.Id == 0)
+            await ProductoService.AddAsync(productoActual);
+        else
+            await ProductoService.UpdateAsync(productoActual);
+
+        mostrarFormulario = false;
+        await CargarProductos();
+    }
+
+    private async Task Eliminar(int id)
+    {
+        await ProductoService.DeleteAsync(id);
+        await CargarProductos();
+    }
+
+    private void Cancelar()
+    {
+        mostrarFormulario = false;
+    }
+}

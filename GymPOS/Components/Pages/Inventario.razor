@@ -1,0 +1,102 @@
+﻿@page "/inventario"
+@using GymPOS.Models
+@using GymPOS.Services
+@inject InventarioService InventarioService
+@rendermode InteractiveServer
+
+<h3>Inventario</h3>
+
+@if (productosBajoStock != null && productosBajoStock.Any())
+{
+    <div class="alert alert-warning">
+        ⚠️ <strong>@productosBajoStock.Count producto(s) con stock bajo:</strong>
+        @string.Join(", ", productosBajoStock.Select(p => p.Nombre))
+    </div>
+}
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Producto</th>
+            <th>Stock Actual</th>
+            <th>Stock Mínimo</th>
+            <th>Estado</th>
+            <th>Ajustar Stock</th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (productos != null)
+        {
+            @foreach (var p in productos)
+            {
+                <tr>
+                    <td>@p.Nombre</td>
+                    <td>@p.Stock</td>
+                    <td>@p.StockMinimo</td>
+                    <td>
+                        @if (p.Stock <= p.StockMinimo)
+                        {
+                            <span class="badge bg-danger">Stock Bajo</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-success">OK</span>
+                        }
+                    </td>
+                    <td style="width:250px">
+                        <div class="input-group">
+                            <input type="number" class="form-control form-control-sm"
+                                   @bind="ajustes[p.Id]" placeholder="Cantidad" />
+                            <button class="btn btn-sm btn-success"
+                                    @onclick="() => AjustarStock(p.Id, true)">
+                                +
+                            </button>
+                            <button class="btn btn-sm btn-danger"
+                                    @onclick="() => AjustarStock(p.Id, false)">
+                                -
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            }
+        }
+    </tbody>
+</table>
+
+@if (mensaje != null)
+{
+    <div class="alert alert-success mt-2">✅ @mensaje</div>
+}
+
+@code {
+    private List<Producto>? productos;
+    private List<Producto>? productosBajoStock;
+    private Dictionary<int, int> ajustes = new();
+    private string? mensaje;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Cargar();
+    }
+
+    private async Task Cargar()
+    {
+        productos = await InventarioService.GetProductosAsync();
+        productosBajoStock = await InventarioService.GetProductosBajoStockAsync();
+        ajustes = productos.ToDictionary(p => p.Id, _ => 0);
+    }
+
+    private async Task AjustarStock(int productoId, bool esSuma)
+    {
+        if (!ajustes.ContainsKey(productoId) || ajustes[productoId] == 0) return;
+
+        var cantidad = esSuma ? ajustes[productoId] : -ajustes[productoId];
+        await InventarioService.AjustarStockAsync(productoId, cantidad, "Ajuste manual");
+
+        mensaje = $"Stock actualizado correctamente.";
+        await Cargar();
+
+        await Task.Delay(3000);
+        mensaje = null;
+    }
+}

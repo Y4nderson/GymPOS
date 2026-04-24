@@ -1,0 +1,267 @@
+﻿@page "/ventas"
+@using GymPOS.Models
+@using GymPOS.Services
+@inject ProductoService ProductoService
+@inject VentaService VentaService
+@inject CajaService CajaService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+@if (!cajaAbierta)
+{
+    <div class="alert alert-warning mt-5 text-center">
+        <h4>⚠️ La caja no está abierta</h4>
+        <p>Debe abrir la caja antes de realizar ventas.</p>
+        <button class="btn btn-primary" @onclick='() => Navigation.NavigateTo("/caja")'>
+            Ir a Abrir Caja
+        </button>
+    </div>
+}
+else if (mostrarConfirmacion)
+{
+    <div class="card p-4 mt-4" style="max-width:400px;margin:auto">
+        <h4 class="text-center">Confirmar Venta</h4>
+        <div class="text-center mb-3">
+            <span class="fs-1 fw-bold text-success">₡@totalCarrito.ToString("N0")</span>
+        </div>
+        <div class="mb-2">
+            <label>Método de Pago</label>
+            <select class="form-control" @bind="metodoPago">
+                <option>Efectivo</option>
+                <option>SINPE Móvil</option>
+                <option>Tarjeta</option>
+            </select>
+        </div>
+        @if (metodoPago == "Efectivo")
+        {
+            <div class="mb-2">
+                <label>Monto Recibido (₡)</label>
+                <input type="number" class="form-control fs-4" @bind="montoRecibido" />
+            </div>
+            @if (montoRecibido >= totalCarrito)
+            {
+                <div class="alert alert-warning text-center fs-5">
+                    💰 Cambio: ₡@((montoRecibido - totalCarrito).ToString("N0"))
+                </div>
+            }
+        }
+        <button class="btn btn-success w-100 mt-2" @onclick="ProcesarVenta">✅ Confirmar</button>
+        <button class="btn btn-secondary w-100 mt-2" @onclick="() => mostrarConfirmacion = false">← Volver</button>
+    </div>
+}
+else
+{
+    <h3>Punto de Venta</h3>
+
+    <div class="row">
+        <div class="col-md-7">
+            <div class="mb-3">
+                <label>Escanear producto</label>
+                <input id="inputScanner" class="form-control form-control-lg"
+                       placeholder="Escanea el código de barra..."
+                       @bind="codigoBusqueda"
+                       @bind:event="oninput"
+                       @onkeydown="OnKeyDown" />
+            </div>
+
+            @if (productosBusqueda != null && productosBusqueda.Any())
+            {
+                <table class="table table-sm table-hover">
+                    <thead>
+                        <tr>
+                            <th>Producto</th>
+                            <th>Precio</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in productosBusqueda)
+                        {
+                            <tr style="cursor:pointer" @onclick="() => AgregarAlCarrito(p)">
+                                <td>@p.Nombre</td>
+                                <td>₡@p.Precio.ToString("N0")</td>
+                                <td><button class="btn btn-sm btn-primary">+</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+
+            @if (mensajeError != null)
+            {
+                <div class="alert alert-danger">⚠️ @mensajeError</div>
+            }
+        </div>
+
+        <div class="col-md-5">
+            <h5>Carrito</h5>
+            @if (!carrito.Any())
+            {
+                <p class="text-muted">No hay productos en el carrito.</p>
+            }
+            else
+            {
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Producto</th>
+                            <th>Cant</th>
+                            <th>Subtotal</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in carrito)
+                        {
+                            <tr>
+                                <td>@item.Producto?.Nombre</td>
+                                <td>
+                                    <input type="number" class="form-control form-control-sm"
+                                           style="width:60px"
+                                           value="@item.Cantidad"
+                                           @onchange="(e) => CambiarCantidad(item, e)" />
+                                </td>
+                                <td>₡@item.Subtotal.ToString("N0")</td>
+                                <td>
+                                    <button class="btn btn-sm btn-danger"
+                                            @onclick="() => EliminarDelCarrito(item)">
+                                        ✕
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+
+                <h4 class="text-end">Total: ₡@totalCarrito.ToString("N0")</h4>
+                <button class="btn btn-success w-100 mt-2 btn-lg"
+                        @onclick="() => mostrarConfirmacion = true">
+                    💳 Cobrar ₡@totalCarrito.ToString("N0")
+                </button>
+                <button class="btn btn-outline-danger w-100 mt-2"
+                        @onclick="LimpiarCarrito">
+                    🗑️ Cancelar Venta
+                </button>
+            }
+        </div>
+    </div>
+}
+
+@if (ventaExitosa)
+{
+    <div class="alert alert-success mt-3 text-center fs-5">
+        ✅ Venta registrada exitosamente
+    </div>
+}
+
+@code {
+    private List<DetalleVenta> carrito = new();
+    private List<Producto>? productosBusqueda;
+    private string codigoBusqueda = string.Empty;
+    private string metodoPago = "Efectivo";
+    private decimal montoRecibido = 0;
+    private bool mostrarConfirmacion = false;
+    private bool ventaExitosa = false;
+    private bool cajaAbierta = false;
+    private string? mensajeError;
+
+    private decimal totalCarrito => carrito.Sum(i => i.Subtotal);
+
+    protected override async Task OnInitializedAsync()
+    {
+        cajaAbierta = await CajaService.CajaAbiertaHoyAsync();
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await BuscarProducto();
+    }
+
+    private async Task BuscarProducto()
+    {
+        if (string.IsNullOrWhiteSpace(codigoBusqueda)) return;
+        mensajeError = null;
+
+        var porCodigo = await ProductoService.GetByCodigoBarraAsync(codigoBusqueda);
+        if (porCodigo != null)
+        {
+            AgregarAlCarrito(porCodigo);
+            codigoBusqueda = string.Empty;
+            productosBusqueda = null;
+            return;
+        }
+
+        var todos = await ProductoService.GetAllAsync();
+        productosBusqueda = todos
+            .Where(p => p.Nombre.Contains(codigoBusqueda, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (!productosBusqueda.Any())
+            mensajeError = $"No se encontró ningún producto con '{codigoBusqueda}'.";
+    }
+
+    private void AgregarAlCarrito(Producto p)
+    {
+        var existente = carrito.FirstOrDefault(i => i.ProductoId == p.Id);
+        if (existente != null)
+            existente.Cantidad++;
+        else
+            carrito.Add(new DetalleVenta
+            {
+                ProductoId = p.Id,
+                Producto = p,
+                Cantidad = 1,
+                PrecioUnitario = p.Precio
+            });
+
+        productosBusqueda = null;
+        codigoBusqueda = string.Empty;
+        mensajeError = null;
+    }
+
+    private void CambiarCantidad(DetalleVenta item, ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int cantidad) && cantidad > 0)
+            item.Cantidad = cantidad;
+        else
+            carrito.Remove(item);
+    }
+
+    private void EliminarDelCarrito(DetalleVenta item)
+    {
+        carrito.Remove(item);
+    }
+
+    private void LimpiarCarrito()
+    {
+        carrito = new();
+        codigoBusqueda = string.Empty;
+        productosBusqueda = null;
+        mensajeError = null;
+    }
+
+    private async Task ProcesarVenta()
+    {
+        if (!carrito.Any()) return;
+        if (metodoPago == "Efectivo" && montoRecibido < totalCarrito) return;
+
+        var venta = new Venta
+        {
+            Fecha = DateTime.Now,
+            MetodoPago = metodoPago,
+            Total = totalCarrito,
+            Detalles = carrito
+        };
+
+        await VentaService.CrearVentaAsync(venta);
+
+        LimpiarCarrito();
+        mostrarConfirmacion = false;
+        montoRecibido = 0;
+        ventaExitosa = true;
+
+        await Task.Delay(3000);
+        ventaExitosa = false;
+    }
+}
