@@ -203,10 +203,24 @@ else
 
     private void AgregarAlCarrito(Producto p)
     {
+        if (p.Stock <= 0)
+        {
+            mensajeError = $"⚠️ {p.Nombre} no tiene stock disponible.";
+            return;
+        }
+
         var existente = carrito.FirstOrDefault(i => i.ProductoId == p.Id);
         if (existente != null)
+        {
+            if (existente.Cantidad >= p.Stock)
+            {
+                mensajeError = $"⚠️ Solo hay {p.Stock} unidades de {p.Nombre}.";
+                return;
+            }
             existente.Cantidad++;
+        }
         else
+        {
             carrito.Add(new DetalleVenta
             {
                 ProductoId = p.Id,
@@ -214,12 +228,12 @@ else
                 Cantidad = 1,
                 PrecioUnitario = p.Precio
             });
+        }
 
         productosBusqueda = null;
         codigoBusqueda = string.Empty;
         mensajeError = null;
     }
-
     private void CambiarCantidad(DetalleVenta item, ChangeEventArgs e)
     {
         if (int.TryParse(e.Value?.ToString(), out int cantidad) && cantidad > 0)

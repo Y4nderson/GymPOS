@@ -15,6 +15,15 @@
 <body>
     <Routes />
     <script src="_framework/blazor.web.js"></script>
+
+    <script>
+        function downloadFile(base64, fileName) {
+            const link = document.createElement('a');
+            link.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + base64;
+            link.download = fileName;
+            link.click();
+        }
+    </script>
 </body>
 
 </html>

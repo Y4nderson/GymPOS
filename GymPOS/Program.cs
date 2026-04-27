@@ -9,7 +9,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-
+builder.Services.AddScoped<EntradaService>();
+builder.Services.AddScoped<ConteoService>();
+builder.Services.AddScoped<ReporteService>();
 builder.Services.AddScoped<CajaService>();
 builder.Services.AddScoped<InventarioService>();
 builder.Services.AddScoped<ProductoService>();

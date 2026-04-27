@@ -1,0 +1,110 @@
+﻿@page "/entradas"
+@using GymPOS.Models
+@using GymPOS.Services
+@inject EntradaService EntradaService
+@inject ProductoService ProductoService
+@inject CajaService CajaService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+@if (!cajaAbierta)
+{
+    <div class="alert alert-warning mt-5 text-center">
+        <h4>⚠️ La caja no está abierta</h4>
+        <button class="btn btn-primary" @onclick='() => Navigation.NavigateTo("/caja")'>Ir a Abrir Caja</button>
+    </div>
+}
+else
+{
+    <h3>📦 Entrada de Producto</h3>
+
+    <div class="card p-3 mb-4" style="max-width:500px">
+        <div class="mb-2">
+            <label>Producto</label>
+            <select class="form-control" @bind="entrada.ProductoId">
+                <option value="0">-- Seleccione --</option>
+                @foreach (var p in productos)
+                {
+                    <option value="@p.Id">@p.Nombre</option>
+                }
+            </select>
+        </div>
+        <div class="mb-2">
+            <label>Cantidad que ingresa</label>
+            <input type="number" class="form-control" @bind="entrada.Cantidad" />
+        </div>
+        <div class="mb-2">
+            <label>Proveedor</label>
+            <input class="form-control" @bind="entrada.Proveedor" placeholder="Nombre del proveedor" />
+        </div>
+        <div class="mb-2">
+            <label>Costo Factura (₡)</label>
+            <input type="number" class="form-control" @bind="entrada.CostoFactura" />
+        </div>
+        <div class="mb-2">
+            <label>Observación</label>
+            <input class="form-control" @bind="entrada.Observacion" />
+        </div>
+        <button class="btn btn-success w-100" @onclick="Registrar">✅ Registrar Entrada</button>
+    </div>
+
+    @if (mensaje != null)
+    {
+        <div class="alert alert-success">✅ @mensaje</div>
+    }
+
+    <h5>Entradas del turno:</h5>
+    <table class="table table-sm table-striped">
+        <thead>
+            <tr>
+                <th>Hora</th>
+                <th>Producto</th>
+                <th>Cantidad</th>
+                <th>Proveedor</th>
+                <th>Factura</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var e in entradasHoy)
+            {
+                <tr>
+                    <td>@e.Fecha.ToString("hh:mm tt")</td>
+                    <td>@e.Producto?.Nombre</td>
+                    <td>@e.Cantidad</td>
+                    <td>@e.Proveedor</td>
+                    <td>₡@e.CostoFactura.ToString("N0")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<Producto> productos = new();
+    private List<EntradaProducto> entradasHoy = new();
+    private EntradaProducto entrada = new();
+    private bool cajaAbierta = false;
+    private string? mensaje;
+
+    protected override async Task OnInitializedAsync()
+    {
+        cajaAbierta = await CajaService.CajaAbiertaHoyAsync();
+        if (cajaAbierta)
+        {
+            productos = await ProductoService.GetAllAsync();
+            entradasHoy = await EntradaService.GetEntradasHoyAsync();
+        }
+    }
+
+    private async Task Registrar()
+    {
+        if (entrada.ProductoId == 0 || entrada.Cantidad <= 0) return;
+
+        await EntradaService.RegistrarEntradaAsync(entrada);
+        entrada = new EntradaProducto();
+        entradasHoy = await EntradaService.GetEntradasHoyAsync();
+        mensaje = "Entrada registrada y stock actualizado.";
+        await Task.Delay(3000);
+        mensaje = null;
+    }
+}

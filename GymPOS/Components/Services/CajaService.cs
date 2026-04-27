@@ -13,7 +13,6 @@ namespace GymPOS.Services
             _context = context;
         }
 
-        // Obtiene el TurnoId activo actual
         public async Task<int> GetTurnoActivoIdAsync()
         {
             var hoy = DateTime.Today;
@@ -33,9 +32,17 @@ namespace GymPOS.Services
                 .ToListAsync();
         }
 
+        public async Task<List<MovimientoCaja>> GetMovimientosHoyAsync()
+        {
+            var hoy = DateTime.Today;
+            return await _context.MovimientosCaja
+                .Where(m => m.Fecha.Date == hoy)
+                .OrderBy(m => m.Fecha)
+                .ToListAsync();
+        }
+
         public async Task AbrirCajaAsync(decimal montoInicial, string descripcion)
         {
-            // Genera un nuevo TurnoId único
             var nuevoTurnoId = (await _context.MovimientosCaja.AnyAsync())
                 ? await _context.MovimientosCaja.MaxAsync(m => m.TurnoId) + 1
                 : 1;
@@ -67,31 +74,72 @@ namespace GymPOS.Services
 
         public async Task<decimal> GetTotalPorMetodoAsync(string metodoPago)
         {
-            var turnoId = await GetTurnoActivoIdAsync();
-            return await _context.Ventas
-                .Where(v => v.TurnoId == turnoId && v.MetodoPago == metodoPago)
-                .SumAsync(v => v.Total);
+            var hoy = DateTime.Today;
+            return await _context.MovimientosCaja
+                .Where(m => m.Fecha.Date == hoy
+                         && m.Tipo == "Venta"
+                         && m.MetodoPago == metodoPago)
+                .SumAsync(m => m.Monto);
         }
 
         public async Task<decimal> GetTotalVentasHoyAsync()
         {
-            var turnoId = await GetTurnoActivoIdAsync();
-            return await _context.Ventas
-                .Where(v => v.TurnoId == turnoId)
-                .SumAsync(v => v.Total);
+            var hoy = DateTime.Today;
+            return await _context.MovimientosCaja
+                .Where(m => m.Fecha.Date == hoy && m.Tipo == "Venta")
+                .SumAsync(m => m.Monto);
         }
 
-        public async Task CerrarCajaAsync(decimal montoFinal, bool cierreDefinitivo = false)
+        public async Task<decimal> GetTotalEgresosHoyAsync()
+        {
+            var hoy = DateTime.Today;
+            return Math.Abs(await _context.MovimientosCaja
+                .Where(m => m.Fecha.Date == hoy && m.Tipo == "Egreso")
+                .SumAsync(m => m.Monto));
+        }
+
+        // Registrar corte sin cerrar la caja
+        public async Task RegistrarCorteAsync(string turno, decimal montoContado)
         {
             var turnoId = await GetTurnoActivoIdAsync();
-            var totalEfectivo = await GetTotalPorMetodoAsync("Efectivo");
-            var diferencia = montoFinal - totalEfectivo;
-            var tipo = cierreDefinitivo ? "CierreDefinitivo" : "Cierre";
+            var hoy = DateTime.Today;
+
+            // Efectivo esperado = monto inicial + ventas efectivo - egresos
+            var apertura = await _context.MovimientosCaja
+                .Where(m => m.Fecha.Date == hoy && m.Tipo == "Apertura")
+                .FirstOrDefaultAsync();
+            var montoInicial = apertura?.Monto ?? 0;
+            var ventasEfectivo = await GetTotalPorMetodoAsync("Efectivo");
+            var egresos = await GetTotalEgresosHoyAsync();
+            var efectivoEsperado = montoInicial + ventasEfectivo - egresos;
+            var diferencia = montoContado - efectivoEsperado;
 
             _context.MovimientosCaja.Add(new MovimientoCaja
             {
-                Tipo = tipo,
-                Descripcion = $"Cierre de turno. Diferencia: ₡{diferencia:N0}",
+                Tipo = "Corte",
+                Descripcion = $"Corte {turno}. Efectivo esperado: ₡{efectivoEsperado:N0}. Contado: ₡{montoContado:N0}. Diferencia: ₡{diferencia:N0}",
+                Monto = montoContado,
+                MetodoPago = "Efectivo",
+                TurnoId = turnoId
+            });
+            await _context.SaveChangesAsync();
+        }
+
+        // Solo el cierre definitivo cierra la caja
+        public async Task CerrarCajaAsync(decimal montoFinal)
+        {
+            var turnoId = await GetTurnoActivoIdAsync();
+            var totalEfectivo = await GetTotalPorMetodoAsync("Efectivo");
+            var apertura = await _context.MovimientosCaja
+                .Where(m => m.Fecha.Date == DateTime.Today && m.Tipo == "Apertura")
+                .FirstOrDefaultAsync();
+            var montoInicial = apertura?.Monto ?? 0;
+            var diferencia = montoFinal - (montoInicial + totalEfectivo);
+
+            _context.MovimientosCaja.Add(new MovimientoCaja
+            {
+                Tipo = "CierreDefinitivo",
+                Descripcion = $"Cierre definitivo del día. Diferencia: ₡{diferencia:N0}",
                 Monto = montoFinal,
                 MetodoPago = "Efectivo",
                 TurnoId = turnoId
@@ -99,14 +147,21 @@ namespace GymPOS.Services
             await _context.SaveChangesAsync();
         }
 
+        // Caja abierta = hay apertura hoy sin cierre definitivo
         public async Task<bool> CajaAbiertaHoyAsync()
         {
-            var hoy = DateTime.Today;
-            var ultimo = await _context.MovimientosCaja
-                .Where(m => m.Fecha.Date == hoy)
-                .OrderByDescending(m => m.Fecha)
+            var hoy = DateTime.Now.Date;
+
+            var apertura = await _context.MovimientosCaja
+                .Where(m => m.Fecha.Date == hoy && m.Tipo == "Apertura")
                 .FirstOrDefaultAsync();
-            return ultimo?.Tipo == "Apertura";
+
+            if (apertura == null) return false;
+
+            var cierreDefinitivo = await _context.MovimientosCaja
+                .AnyAsync(m => m.Fecha.Date == hoy && m.Tipo == "CierreDefinitivo");
+
+            return !cierreDefinitivo;
         }
 
         public async Task<bool> CajaCerradaDefinitivamenteHoyAsync()

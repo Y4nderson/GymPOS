@@ -2,100 +2,355 @@
 @using GymPOS.Models
 @using GymPOS.Services
 @inject InventarioService InventarioService
+@inject ConteoService ConteoService
+@inject CajaService CajaService
+@inject NavigationManager Navigation
 @rendermode InteractiveServer
 
-<h3>Inventario</h3>
-
-@if (productosBajoStock != null && productosBajoStock.Any())
+@if (!cajaAbierta)
 {
-    <div class="alert alert-warning">
-        ⚠️ <strong>@productosBajoStock.Count producto(s) con stock bajo:</strong>
-        @string.Join(", ", productosBajoStock.Select(p => p.Nombre))
+    <div class="alert alert-warning mt-5 text-center">
+        <h4>⚠️ La caja no está abierta</h4>
+        <p>Debe abrir la caja antes de realizar operaciones.</p>
+        <button class="btn btn-primary" @onclick='() => Navigation.NavigateTo("/caja")'>
+            Ir a Abrir Caja
+        </button>
     </div>
 }
+else
+{
+    <h3>📦 Inventario</h3>
 
-<table class="table table-striped">
-    <thead>
-        <tr>
-            <th>Producto</th>
-            <th>Stock Actual</th>
-            <th>Stock Mínimo</th>
-            <th>Estado</th>
-            <th>Ajustar Stock</th>
-        </tr>
-    </thead>
-    <tbody>
-        @if (productos != null)
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+            <button class="nav-link @(tabActiva == "stock" ? "active" : "")"
+                    @onclick='() => tabActiva = "stock"'>
+                Stock Actual
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @(tabActiva == "conteo" ? "active" : "")"
+                    @onclick='() => tabActiva = "conteo"'>
+                Conteo Físico
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @(tabActiva == "ajuste" ? "active" : "")"
+                    @onclick='() => tabActiva = "ajuste"'>
+                Ajuste Manual
+            </button>
+        </li>
+    </ul>
+
+    @if (tabActiva == "stock")
+    {
+        @if (productosBajoStock != null && productosBajoStock.Any())
         {
-            @foreach (var p in productos)
-            {
+            <div class="alert alert-warning">
+                ⚠️ <strong>@productosBajoStock.Count producto(s) con stock bajo:</strong>
+                @string.Join(", ", productosBajoStock.Select(p => p.Nombre))
+            </div>
+        }
+
+        <table class="table table-striped">
+            <thead>
                 <tr>
-                    <td>@p.Nombre</td>
-                    <td>@p.Stock</td>
-                    <td>@p.StockMinimo</td>
-                    <td>
-                        @if (p.Stock <= p.StockMinimo)
-                        {
-                            <span class="badge bg-danger">Stock Bajo</span>
-                        }
-                        else
-                        {
-                            <span class="badge bg-success">OK</span>
-                        }
-                    </td>
-                    <td style="width:250px">
-                        <div class="input-group">
-                            <input type="number" class="form-control form-control-sm"
-                                   @bind="ajustes[p.Id]" placeholder="Cantidad" />
-                            <button class="btn btn-sm btn-success"
-                                    @onclick="() => AjustarStock(p.Id, true)">
-                                +
-                            </button>
-                            <button class="btn btn-sm btn-danger"
-                                    @onclick="() => AjustarStock(p.Id, false)">
-                                -
-                            </button>
-                        </div>
-                    </td>
+                    <th>Producto</th>
+                    <th>Stock Actual</th>
+                    <th>Stock Mínimo</th>
+                    <th>Estado</th>
+                    <th>Cambiar Mínimo</th>
                 </tr>
+            </thead>
+            <tbody>
+                @if (productos != null)
+                {
+                    @foreach (var p in productos)
+                    {
+                        <tr>
+                            <td>@p.Nombre</td>
+                            <td>@p.Stock</td>
+                            <td>@p.StockMinimo</td>
+                            <td>
+                                @if (p.Stock <= p.StockMinimo)
+                                {
+                                    <span class="badge bg-danger">Stock Bajo</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-success">OK</span>
+                                }
+                            </td>
+                            <td style="width:200px">
+                                <div class="input-group input-group-sm">
+                                    <input type="number" class="form-control"
+                                           value="@p.StockMinimo"
+                                           @onchange="(e) => CambiarStockMinimo(p, e)" />
+                                    <span class="input-group-text">mín</span>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (tabActiva == "conteo")
+    {
+        <div class="mb-3">
+            <label>Tipo de conteo</label>
+            <select class="form-control" style="max-width:200px" @bind="tipoConteo">
+                <option>Mañana</option>
+                <option>Mediodía</option>
+                <option>Tarde</option>
+                <option>Noche</option>
+            </select>
+        </div>
+
+        @if (tipoConteo == "Mañana")
+        {
+            <div class="alert alert-info">
+                📋 Conteo matutino — solo registra el inventario inicial del día. No genera corte ni modifica el stock del sistema.
+            </div>
+        }
+        else if (tipoConteo == "Mediodía" || tipoConteo == "Tarde")
+        {
+            <div class="alert alert-warning">
+                💰 Conteo con corte — registra inventario y muestra cuánto se vendió en el turno. Recuerda hacer el corte en Caja.
+            </div>
+        }
+        else if (tipoConteo == "Noche")
+        {
+            <div class="alert alert-danger">
+                🔒 Cierre definitivo — registra inventario final del día. Ve a Caja para hacer el cierre definitivo.
+            </div>
+        }
+
+        <p class="text-muted small">ℹ️ El conteo físico no modifica el stock del sistema. Es solo para auditoría y control.</p>
+
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th>Stock Sistema</th>
+                    <th>Conteo Físico</th>
+                    <th>Diferencia</th>
+                    @if (tipoConteo != "Mañana")
+                    {
+                        <th>Total ₡ Vendido</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in itemsConteo)
+                {
+                    var diff = item.CantidadContada - item.Producto.Stock;
+                    var totalVendido = Math.Abs(diff < 0 ? diff : 0) * item.Producto.Precio;
+                    <tr>
+                        <td>@item.Producto.Nombre</td>
+                        <td>@item.Producto.Stock</td>
+                        <td>
+                            <input type="number" class="form-control form-control-sm"
+                                   style="width:80px"
+                                   @bind="item.CantidadContada" />
+                        </td>
+                        <td class="@(diff == 0 ? "text-success" : diff < 0 ? "text-danger" : "text-warning") fw-bold">
+                            @diff
+                        </td>
+                        @if (tipoConteo != "Mañana")
+                        {
+                            <td>₡@totalVendido.ToString("N0")</td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        @if (tipoConteo != "Mañana")
+        {
+            <div class="card p-3 mb-3" style="max-width:300px">
+                <strong>Total vendido por conteo:</strong>
+                <h4 class="text-success">
+                    ₡@itemsConteo.Sum(i => Math.Abs(Math.Min(i.CantidadContada - i.Producto.Stock, 0)) * i.Producto.Precio).ToString("N0")
+                </h4>
+            </div>
+        }
+
+        <button class="btn btn-primary" @onclick="GuardarConteo">💾 Guardar Conteo</button>
+
+        @if (conteosGuardados.Any())
+        {
+            <h5 class="mt-4">Conteos del día:</h5>
+
+            @foreach (var turno in new[] { "Mañana", "Mediodía", "Tarde", "Noche" })
+            {
+                var conteosDelTurno = conteosGuardados.Where(c => c.Turno == turno).ToList();
+                @if (conteosDelTurno.Any())
+                {
+                    var horaConteo = conteosDelTurno.First().Fecha.ToString("hh:mm tt");
+                    var colorCard = turno == "Mañana" ? "border-info" :
+                                    turno == "Mediodía" ? "border-warning" :
+                                    turno == "Tarde" ? "border-primary" : "border-danger";
+
+                    <div class="card mb-3 @colorCard">
+                        <div class="card-header fw-bold">
+                            @(turno == "Mañana" ? "📋" : turno == "Mediodía" ? "☀️" : turno == "Tarde" ? "🌤️" : "🌙")
+                            Conteo @turno — @horaConteo
+                        </div>
+                        <div class="card-body p-0">
+                            <table class="table table-sm mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Producto</th>
+                                        <th>Sistema</th>
+                                        <th>Físico</th>
+                                        <th>Diferencia</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var c in conteosDelTurno.GroupBy(c => c.ProductoId).Select(g => g.Last()))
+                                    {
+                                        <tr>
+                                            <td>@c.Producto?.Nombre</td>
+                                            <td>@c.CantidadSistema</td>
+                                            <td>@c.CantidadContada</td>
+                                            <td class="@(c.Diferencia == 0 ? "text-success" : "text-danger") fw-bold">
+                                                @c.Diferencia
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
             }
         }
-    </tbody>
-</table>
+    }
+
+    @if (tabActiva == "ajuste")
+    {
+        <div class="card p-3" style="max-width:500px">
+            <h5>⚠️ Ajuste Manual de Stock</h5>
+            <p class="text-muted small">Solo para correcciones de errores. Todos los ajustes quedan registrados.</p>
+
+            <div class="mb-2">
+                <label>Producto</label>
+                <select class="form-control" @bind="ajusteProductoId">
+                    <option value="0">-- Seleccione --</option>
+                    @foreach (var p in productos ?? new())
+                    {
+                        <option value="@p.Id">@p.Nombre (Stock: @p.Stock)</option>
+                    }
+                </select>
+            </div>
+            <div class="mb-2">
+                <label>Cantidad (positivo suma, negativo resta)</label>
+                <input type="number" class="form-control" @bind="ajusteCantidad" />
+            </div>
+            <div class="mb-2">
+                <label>Motivo <span class="text-danger">*</span></label>
+                <input class="form-control" @bind="ajusteMotivo"
+                       placeholder="Ej: Producto dañado, Error de conteo..." />
+            </div>
+            <button class="btn btn-warning w-100" @onclick="AjustarStock">
+                Aplicar Ajuste
+            </button>
+        </div>
+    }
+}
 
 @if (mensaje != null)
 {
-    <div class="alert alert-success mt-2">✅ @mensaje</div>
+    <div class="alert alert-success mt-3">✅ @mensaje</div>
 }
 
 @code {
     private List<Producto>? productos;
     private List<Producto>? productosBajoStock;
-    private Dictionary<int, int> ajustes = new();
+    private List<ItemConteo> itemsConteo = new();
+    private List<ConteoFisico> conteosGuardados = new();
+    private string tabActiva = "stock";
+    private string tipoConteo = "Mañana";
     private string? mensaje;
+    private bool cajaAbierta = false;
+
+    private int ajusteProductoId = 0;
+    private int ajusteCantidad = 0;
+    private string ajusteMotivo = string.Empty;
+
+    public class ItemConteo
+    {
+        public Producto Producto { get; set; } = new();
+        public int CantidadContada { get; set; }
+    }
 
     protected override async Task OnInitializedAsync()
     {
-        await Cargar();
+        cajaAbierta = await CajaService.CajaAbiertaHoyAsync();
+        if (cajaAbierta)
+            await Cargar();
     }
 
     private async Task Cargar()
     {
         productos = await InventarioService.GetProductosAsync();
         productosBajoStock = await InventarioService.GetProductosBajoStockAsync();
-        ajustes = productos.ToDictionary(p => p.Id, _ => 0);
+        itemsConteo = productos.Select(p => new ItemConteo
+        {
+            Producto = p,
+            CantidadContada = p.Stock
+        }).ToList();
+        conteosGuardados = await ConteoService.GetConteosDelTurnoAsync();
     }
 
-    private async Task AjustarStock(int productoId, bool esSuma)
+    private async Task CambiarStockMinimo(Producto p, ChangeEventArgs e)
     {
-        if (!ajustes.ContainsKey(productoId) || ajustes[productoId] == 0) return;
+        if (int.TryParse(e.Value?.ToString(), out int nuevoMinimo))
+        {
+            await InventarioService.ActualizarStockMinimoAsync(p.Id, nuevoMinimo);
+            await Cargar();
+        }
+    }
 
-        var cantidad = esSuma ? ajustes[productoId] : -ajustes[productoId];
-        await InventarioService.AjustarStockAsync(productoId, cantidad, "Ajuste manual");
+    private async Task GuardarConteo()
+    {
+        var lista = itemsConteo.Select(c => new ConteoFisico
+        {
+            ProductoId = c.Producto.Id,
+            CantidadContada = c.CantidadContada,
+            CantidadSistema = c.Producto.Stock
+        }).ToList();
 
-        mensaje = $"Stock actualizado correctamente.";
+        await ConteoService.GuardarConteoAsync(lista, tipoConteo);
+        conteosGuardados = await ConteoService.GetConteosDelTurnoAsync();
+
+        if (tipoConteo == "Mañana")
+            mensaje = "✅ Conteo matutino guardado correctamente.";
+        else if (tipoConteo == "Mediodía" || tipoConteo == "Tarde")
+            mensaje = $"✅ Conteo de {tipoConteo} guardado. Recuerda hacer el corte en Caja.";
+        else if (tipoConteo == "Noche")
+            mensaje = "🔒 Conteo de cierre guardado. Ve a Caja para hacer el cierre definitivo.";
+
+        await Task.Delay(4000);
+        mensaje = null;
+    }
+
+    private async Task AjustarStock()
+    {
+        if (ajusteProductoId == 0 || ajusteCantidad == 0 || string.IsNullOrWhiteSpace(ajusteMotivo))
+        {
+            mensaje = "⚠️ Complete todos los campos incluyendo el motivo.";
+            return;
+        }
+
+        await InventarioService.AjustarStockAsync(ajusteProductoId, ajusteCantidad, ajusteMotivo);
+        ajusteProductoId = 0;
+        ajusteCantidad = 0;
+        ajusteMotivo = string.Empty;
+        mensaje = "Ajuste aplicado correctamente.";
         await Cargar();
-
         await Task.Delay(3000);
         mensaje = null;
     }

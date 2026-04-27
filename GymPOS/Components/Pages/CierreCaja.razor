@@ -2,6 +2,10 @@
 @using GymPOS.Models
 @using GymPOS.Services
 @inject CajaService CajaService
+@inject ConteoService ConteoService
+@inject ReporteService ReporteService
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
 @rendermode InteractiveServer
 
 @if (!cajaAbierta)
@@ -73,9 +77,15 @@ else
             </button>
         </li>
         <li class="nav-item">
+            <button class="nav-link @(tabActiva == "corte" ? "active" : "")"
+                    @onclick='() => tabActiva = "corte"'>
+                Corte de Turno
+            </button>
+        </li>
+        <li class="nav-item">
             <button class="nav-link @(tabActiva == "cierre" ? "active" : "")"
                     @onclick='() => tabActiva = "cierre"'>
-                Cierre
+                Cierre del Día
             </button>
         </li>
     </ul>
@@ -104,10 +114,10 @@ else
                     </tr>
                     <tr>
                         <td>Egresos</td>
-                        <td class="text-end text-danger">₡@totalEgresos.ToString("N0")</td>
+                        <td class="text-end text-danger">-₡@totalEgresos.ToString("N0")</td>
                     </tr>
-                    <tr class="fw-bold">
-                        <td>Total Ventas</td>
+                    <tr class="fw-bold table-dark">
+                        <td>Total Ventas del Día</td>
                         <td class="text-end">₡@totalVentas.ToString("N0")</td>
                     </tr>
                 </tbody>
@@ -181,29 +191,173 @@ else
         </table>
     }
 
+    @if (tabActiva == "corte")
+    {
+        <div class="card p-3" style="max-width:500px">
+            <h5>✂️ Registrar Corte de Turno</h5>
+            <p class="text-muted small">El corte registra el estado actual sin cerrar la caja. Puedes seguir operando normalmente.</p>
+
+            <div class="mb-2">
+                <label>Turno</label>
+                <select class="form-control" @bind="turnoCorte">
+                    <option>Mediodía</option>
+                    <option>Tarde</option>
+                </select>
+            </div>
+
+            <table class="table table-sm mb-3">
+                <tbody>
+                    <tr>
+                        <td>Ventas Efectivo</td>
+                        <td class="text-end text-success">₡@ventasEfectivo.ToString("N0")</td>
+                    </tr>
+                    <tr>
+                        <td>Ventas SINPE</td>
+                        <td class="text-end text-primary">₡@totalSinpe.ToString("N0")</td>
+                    </tr>
+                    <tr>
+                        <td>Ventas Tarjeta</td>
+                        <td class="text-end text-warning">₡@totalTarjeta.ToString("N0")</td>
+                    </tr>
+                    <tr>
+                        <td>Ventas Conteo Físico</td>
+                        <td class="text-end text-info">₡@totalVentasPorConteo.ToString("N0")</td>
+                    </tr>
+                    <tr class="fw-bold">
+                        <td>Efectivo Esperado en Caja</td>
+                        <td class="text-end">₡@totalEfectivo.ToString("N0")</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="mb-2">
+                <label>Efectivo Físico Contado (₡)</label>
+                <input type="number" class="form-control fs-4" @bind="montoCorte" />
+            </div>
+
+            @if (montoCorte > 0)
+            {
+                var diff = montoCorte - totalEfectivo;
+                <div class="alert @(diff == 0 ? "alert-success" : diff > 0 ? "alert-warning" : "alert-danger") text-center mt-2">
+                    @if (diff == 0)
+                    {
+                        <span>✅ Todo cuadra perfectamente</span>
+                    }
+                    else if (diff > 0)
+                    {
+                        <span>⬆️ Sobran ₡@diff.ToString("N0")</span>
+                    }
+                    else
+                    {
+                        <span>⬇️ Faltan ₡@Math.Abs(diff).ToString("N0")</span>
+                    }
+                </div>
+            }
+
+            <button class="btn btn-primary w-100 mt-2" @onclick="RegistrarCorte">
+                ✂️ Registrar Corte @turnoCorte
+            </button>
+        </div>
+
+        @if (cortesDelDia.Any())
+        {
+            <h6 class="mt-4">Cortes registrados hoy:</h6>
+            <table class="table table-sm table-striped">
+                <thead>
+                    <tr>
+                        <th>Hora</th>
+                        <th>Turno</th>
+                        <th>Descripción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in cortesDelDia)
+                    {
+                        <tr>
+                            <td>@c.Fecha.ToString("hh:mm tt")</td>
+                            <td>@c.Descripcion</td>
+                            <td>₡@c.Monto.ToString("N0")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    }
+
     @if (tabActiva == "cierre")
     {
-        @if (cajaCerrada)
+        @if (cajaCerradaDefinitivamente)
         {
             <div class="alert alert-info text-center">
-                ✅ La caja ya fue cerrada hoy.
+                ✅ La caja fue cerrada definitivamente hoy.
             </div>
         }
         else
         {
-            <div class="card p-3" style="max-width:400px">
-                <h5>Cerrar Caja</h5>
+            <div class="card p-3" style="max-width:500px">
+                <h5>🔒 Cierre Definitivo del Día</h5>
+                <p class="text-muted small">Esta acción cierra la caja del día. Mañana se deberá hacer una nueva apertura.</p>
+
+                <table class="table table-sm mb-3">
+                    <tbody>
+                        <tr>
+                            <td>Monto Inicial</td>
+                            <td class="text-end fw-bold">₡@montoInicialCaja.ToString("N0")</td>
+                        </tr>
+                        <tr>
+                            <td>Ventas Efectivo</td>
+                            <td class="text-end text-success">₡@ventasEfectivo.ToString("N0")</td>
+                        </tr>
+                        <tr>
+                            <td>Ventas SINPE</td>
+                            <td class="text-end text-primary">₡@totalSinpe.ToString("N0")</td>
+                        </tr>
+                        <tr>
+                            <td>Ventas Tarjeta</td>
+                            <td class="text-end text-warning">₡@totalTarjeta.ToString("N0")</td>
+                        </tr>
+                        <tr>
+                            <td>Ventas por Conteo Físico</td>
+                            <td class="text-end text-info">₡@totalVentasPorConteo.ToString("N0")</td>
+                        </tr>
+                        <tr>
+                            <td>Egresos</td>
+                            <td class="text-end text-danger">-₡@totalEgresos.ToString("N0")</td>
+                        </tr>
+                        <tr class="fw-bold">
+                            <td>Efectivo Esperado en Caja</td>
+                            <td class="text-end">₡@totalEfectivo.ToString("N0")</td>
+                        </tr>
+                    </tbody>
+                </table>
+
                 <div class="mb-2">
-                    <label>Monto Final Contado en Caja (₡)</label>
+                    <label>Efectivo Físico Contado (₡)</label>
                     <input type="number" class="form-control fs-4" @bind="montoFinal" />
                 </div>
+
                 @if (montoFinal > 0)
                 {
-                    <div class="alert @(montoFinal - totalEfectivo >= 0 ? "alert-success" : "alert-danger")">
-                        Diferencia: ₡@((montoFinal - totalEfectivo).ToString("N0"))
+                    var diff = montoFinal - totalEfectivo;
+                    <div class="alert @(diff == 0 ? "alert-success" : diff > 0 ? "alert-warning" : "alert-danger") text-center fs-5 mt-2">
+                        @if (diff == 0)
+                        {
+                            <span>✅ Todo cuadra perfectamente</span>
+                        }
+                        else if (diff > 0)
+                        {
+                            <span>⬆️ Sobran ₡@diff.ToString("N0")</span>
+                        }
+                        else
+                        {
+                            <span>⬇️ Faltan ₡@Math.Abs(diff).ToString("N0")</span>
+                        }
                     </div>
                 }
-                <button class="btn btn-danger w-100" @onclick="CerrarCaja">🔒 Cerrar Caja</button>
+
+                <button class="btn btn-danger w-100 mt-2" @onclick="CerrarCaja">
+                    🔒 Cerrar Caja Definitivamente
+                </button>
             </div>
         }
     }
@@ -216,10 +370,11 @@ else
 
 @code {
     private bool cajaAbierta = false;
-    private bool cajaCerrada = false;
+    private bool cajaCerradaDefinitivamente = false;
     private string descripcionApertura = string.Empty;
     private decimal montoInicial = 0;
     private decimal montoFinal = 0;
+    private decimal montoCorte = 0;
     private decimal montoInicialCaja = 0;
     private decimal totalEfectivo = 0;
     private decimal totalSinpe = 0;
@@ -228,11 +383,14 @@ else
     private decimal totalVentas = 0;
     private decimal ventasEfectivo = 0;
     private decimal totalEgresos = 0;
+    private decimal totalVentasPorConteo = 0;
     private List<MovimientoCaja> movimientos = new();
+    private List<MovimientoCaja> cortesDelDia = new();
     private string egresoDescripcion = string.Empty;
     private decimal egresoMonto = 0;
     private string? mensaje;
     private string tabActiva = "resumen";
+    private string turnoCorte = "Mediodía";
 
     protected override async Task OnInitializedAsync()
     {
@@ -242,27 +400,30 @@ else
     private async Task Cargar()
     {
         cajaAbierta = await CajaService.CajaAbiertaHoyAsync();
-       
+        cajaCerradaDefinitivamente = await CajaService.CajaCerradaDefinitivamenteHoyAsync();
+
         if (cajaAbierta)
         {
-            movimientos = await CajaService.GetMovimientosTurnoAsync();
+            movimientos = await CajaService.GetMovimientosHoyAsync();
             totalVentas = await CajaService.GetTotalVentasHoyAsync();
             montoInicialCaja = movimientos.FirstOrDefault(m => m.Tipo == "Apertura")?.Monto ?? 0;
             ventasEfectivo = await CajaService.GetTotalPorMetodoAsync("Efectivo");
             totalSinpe = await CajaService.GetTotalPorMetodoAsync("SINPE Móvil");
             totalTarjeta = await CajaService.GetTotalPorMetodoAsync("Tarjeta");
-            totalEgresos = Math.Abs(movimientos.Where(m => m.Tipo == "Egreso").Sum(m => m.Monto));
+            totalEgresos = await CajaService.GetTotalEgresosHoyAsync();
             totalEfectivo = montoInicialCaja + ventasEfectivo - totalEgresos;
             totalGeneral = totalEfectivo + totalSinpe + totalTarjeta;
+            totalVentasPorConteo = await ConteoService.GetTotalVentasPorConteoAsync();
+            cortesDelDia = movimientos.Where(m => m.Tipo == "Corte").ToList();
         }
     }
-
     private async Task AbrirCaja()
     {
         if (string.IsNullOrWhiteSpace(descripcionApertura)) return;
         await CajaService.AbrirCajaAsync(montoInicial, descripcionApertura);
-        mensaje = "Caja abierta exitosamente.";
         await Cargar();
+        StateHasChanged();
+        mensaje = "Caja abierta exitosamente.";
         await Task.Delay(3000);
         mensaje = null;
     }
@@ -279,12 +440,26 @@ else
         mensaje = null;
     }
 
-    private bool esCierreDefinitivo = false;
+    private async Task RegistrarCorte()
+    {
+        await CajaService.RegistrarCorteAsync(turnoCorte, montoCorte);
+        montoCorte = 0;
+        mensaje = $"✂️ Corte de {turnoCorte} registrado. La caja sigue abierta.";
+        await Cargar();
+        await Task.Delay(3000);
+        mensaje = null;
+    }
 
     private async Task CerrarCaja()
     {
-        await CajaService.CerrarCajaAsync(montoFinal, esCierreDefinitivo);
-        mensaje = esCierreDefinitivo ? "Caja cerrada definitivamente." : "Turno cerrado. Ya puede abrir un nuevo turno.";
+        await CajaService.CerrarCajaAsync(montoFinal);
+
+        var bytes = await ReporteService.GenerarReporteTurnoExcelAsync();
+        var base64 = Convert.ToBase64String(bytes);
+        var fileName = $"Reporte_{DateTime.Now:yyyyMMdd_HHmm}.xlsx";
+        await JS.InvokeVoidAsync("downloadFile", base64, fileName);
+
+        mensaje = "🔒 Caja cerrada definitivamente. Reporte descargado.";
         await Cargar();
         await Task.Delay(3000);
         mensaje = null;

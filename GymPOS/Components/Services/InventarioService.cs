@@ -14,7 +14,10 @@ namespace GymPOS.Services
         }
 
         public async Task<List<Producto>> GetProductosAsync()
-            => await _context.Productos.Where(p => p.Activo).OrderBy(p => p.Nombre).ToListAsync();
+     => await _context.Productos
+         .Where(p => p.Activo)
+         .OrderBy(p => p.Marca)
+         .ToListAsync();
 
         public async Task AjustarStockAsync(int productoId, int cantidad, string motivo)
         {
@@ -26,9 +29,20 @@ namespace GymPOS.Services
             }
         }
 
+        public async Task ActualizarStockMinimoAsync(int productoId, int nuevoMinimo)
+        {
+            var producto = await _context.Productos.FindAsync(productoId);
+            if (producto != null)
+            {
+                producto.StockMinimo = nuevoMinimo;
+                await _context.SaveChangesAsync();
+            }
+        }
+
         public async Task<List<Producto>> GetProductosBajoStockAsync()
-            => await _context.Productos
-                .Where(p => p.Activo && p.Stock <= p.StockMinimo)
-                .ToListAsync();
+    => await _context.Productos
+        .Where(p => p.Activo && p.Stock <= p.StockMinimo)
+        .OrderBy(p => p.Marca)
+        .ToListAsync();
     }
 }

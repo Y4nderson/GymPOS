@@ -1,0 +1,118 @@
+﻿@page "/reportes"
+@using GymPOS.Services
+@inject ReporteService ReporteService
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+<h3>📊 Reportes Históricos</h3>
+
+<div class="row">
+    <div class="col-md-5">
+        <div class="card p-3 mb-3">
+            <h5>Reporte del Día Actual</h5>
+            <p class="text-muted small">Descarga el reporte del día de hoy.</p>
+            <button class="btn btn-success" @onclick="DescargarHoy">
+                📥 Descargar Reporte de Hoy
+            </button>
+        </div>
+
+        <div class="card p-3">
+            <h5>Reporte por Fecha</h5>
+            <p class="text-muted small">Selecciona cualquier fecha para descargar su reporte.</p>
+            <div class="mb-2">
+                <label>Fecha</label>
+                <input type="date" class="form-control"
+                       @bind="fechaSeleccionada"
+                       max="@DateTime.Today.ToString("yyyy-MM-dd")" />
+            </div>
+            <button class="btn btn-primary" @onclick="DescargarPorFecha">
+                📥 Descargar Reporte
+            </button>
+        </div>
+    </div>
+
+    <div class="col-md-7">
+        <div class="card p-3">
+            <h5>Días con registros</h5>
+            @if (fechasConRegistros == null)
+            {
+                <p>Cargando...</p>
+            }
+            else if (!fechasConRegistros.Any())
+            {
+                <p class="text-muted">No hay registros históricos aún.</p>
+            }
+            else
+            {
+                <table class="table table-sm table-hover">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var fecha in fechasConRegistros)
+                        {
+                            <tr>
+                                <td>@fecha.ToString("dddd dd 'de' MMMM 'de' yyyy")</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary"
+                                            @onclick="() => DescargarFecha(fecha)">
+                                        📥 Descargar
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+</div>
+
+@if (mensaje != null)
+{
+    <div class="alert alert-info mt-3 text-center">@mensaje</div>
+}
+
+@code {
+    private List<DateTime>? fechasConRegistros;
+    private DateTime fechaSeleccionada = DateTime.Today;
+    private string? mensaje;
+
+    protected override async Task OnInitializedAsync()
+    {
+        fechasConRegistros = await ReporteService.GetFechasConRegistrosAsync();
+    }
+
+    private async Task DescargarHoy()
+    {
+        await Descargar(DateTime.Today);
+    }
+
+    private async Task DescargarPorFecha()
+    {
+        await Descargar(fechaSeleccionada);
+    }
+
+    private async Task DescargarFecha(DateTime fecha)
+    {
+        await Descargar(fecha);
+    }
+
+    private async Task Descargar(DateTime fecha)
+    {
+        mensaje = "⏳ Generando reporte...";
+        StateHasChanged();
+
+        var bytes = await ReporteService.GenerarReportePorFechaAsync(fecha);
+        var base64 = Convert.ToBase64String(bytes);
+        var fileName = $"Reporte_InlineGym_{fecha:yyyyMMdd}.xlsx";
+        await JS.InvokeVoidAsync("downloadFile", base64, fileName);
+
+        mensaje = $"✅ Reporte del {fecha:dd/MM/yyyy} descargado.";
+        await Task.Delay(3000);
+        mensaje = null;
+    }
+}
