@@ -34,13 +34,12 @@ namespace GymPOS.Services
 
         public async Task<List<MovimientoCaja>> GetMovimientosHoyAsync()
         {
-            var hoy = DateTime.Today;
+            var turnoId = await GetTurnoActivoIdAsync();
             return await _context.MovimientosCaja
-                .Where(m => m.Fecha.Date == hoy)
+                .Where(m => m.TurnoId == turnoId)
                 .OrderBy(m => m.Fecha)
                 .ToListAsync();
         }
-
         public async Task AbrirCajaAsync(decimal montoInicial, string descripcion)
         {
             var nuevoTurnoId = (await _context.MovimientosCaja.AnyAsync())
@@ -53,7 +52,8 @@ namespace GymPOS.Services
                 Descripcion = descripcion,
                 Monto = montoInicial,
                 MetodoPago = "Efectivo",
-                TurnoId = nuevoTurnoId
+                TurnoId = nuevoTurnoId,
+                Turno = "Apertura"
             });
             await _context.SaveChangesAsync();
         }
@@ -74,9 +74,9 @@ namespace GymPOS.Services
 
         public async Task<decimal> GetTotalPorMetodoAsync(string metodoPago)
         {
-            var hoy = DateTime.Today;
+            var turnoId = await GetTurnoActivoIdAsync();
             return await _context.MovimientosCaja
-                .Where(m => m.Fecha.Date == hoy
+                .Where(m => m.TurnoId == turnoId
                          && m.Tipo == "Venta"
                          && m.MetodoPago == metodoPago)
                 .SumAsync(m => m.Monto);
@@ -84,20 +84,19 @@ namespace GymPOS.Services
 
         public async Task<decimal> GetTotalVentasHoyAsync()
         {
-            var hoy = DateTime.Today;
+            var turnoId = await GetTurnoActivoIdAsync();
             return await _context.MovimientosCaja
-                .Where(m => m.Fecha.Date == hoy && m.Tipo == "Venta")
+                .Where(m => m.TurnoId == turnoId && m.Tipo == "Venta")
                 .SumAsync(m => m.Monto);
         }
 
         public async Task<decimal> GetTotalEgresosHoyAsync()
         {
-            var hoy = DateTime.Today;
+            var turnoId = await GetTurnoActivoIdAsync();
             return Math.Abs(await _context.MovimientosCaja
-                .Where(m => m.Fecha.Date == hoy && m.Tipo == "Egreso")
+                .Where(m => m.TurnoId == turnoId && m.Tipo == "Egreso")
                 .SumAsync(m => m.Monto));
         }
-
         // Registrar corte sin cerrar la caja
         public async Task RegistrarCorteAsync(string turno, decimal montoContado)
         {
@@ -154,21 +153,32 @@ namespace GymPOS.Services
 
             var apertura = await _context.MovimientosCaja
                 .Where(m => m.Fecha.Date == hoy && m.Tipo == "Apertura")
+                .OrderByDescending(m => m.Fecha)
                 .FirstOrDefaultAsync();
 
             if (apertura == null) return false;
 
-            var cierreDefinitivo = await _context.MovimientosCaja
-                .AnyAsync(m => m.Fecha.Date == hoy && m.Tipo == "CierreDefinitivo");
+            var cierrePostApertura = await _context.MovimientosCaja
+                .AnyAsync(m => m.Fecha.Date == hoy
+                            && m.Tipo == "CierreDefinitivo"
+                            && m.Fecha > apertura.Fecha);
 
-            return !cierreDefinitivo;
+            return !cierrePostApertura;
         }
-
         public async Task<bool> CajaCerradaDefinitivamenteHoyAsync()
         {
-            var hoy = DateTime.Today;
+            var hoy = DateTime.Now.Date;
+            var apertura = await _context.MovimientosCaja
+                .Where(m => m.Fecha.Date == hoy && m.Tipo == "Apertura")
+                .OrderByDescending(m => m.Fecha)
+                .FirstOrDefaultAsync();
+
+            if (apertura == null) return false;
+
             return await _context.MovimientosCaja
-                .AnyAsync(m => m.Fecha.Date == hoy && m.Tipo == "CierreDefinitivo");
+                .AnyAsync(m => m.Fecha.Date == hoy
+                            && m.Tipo == "CierreDefinitivo"
+                            && m.Fecha > apertura.Fecha);
         }
     }
 }

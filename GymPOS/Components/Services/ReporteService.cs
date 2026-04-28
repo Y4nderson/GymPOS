@@ -16,21 +16,44 @@ namespace GymPOS.Services
             _cajaService = cajaService;
         }
 
+        // Reporte del turno activo actual
         public async Task<byte[]> GenerarReporteTurnoExcelAsync()
         {
-            return await GenerarReportePorFechaAsync(DateTime.Today);
-        }
+            var turnoId = await _cajaService.GetTurnoActivoIdAsync();
+            var hoy = DateTime.Today;
 
-        public async Task<List<DateTime>> GetFechasConRegistrosAsync()
-        {
-            return await _context.MovimientosCaja
-                .Where(m => m.Tipo == "Apertura")
-                .Select(m => m.Fecha.Date)
-                .Distinct()
-                .OrderByDescending(f => f)
+            var ventas = await _context.Ventas
+                .Include(v => v.Detalles).ThenInclude(d => d.Producto)
+                .Where(v => v.TurnoId == turnoId)
+                .OrderBy(v => v.Fecha)
                 .ToListAsync();
+
+            var entradas = await _context.EntradasProducto
+                .Include(e => e.Producto)
+                .Where(e => e.TurnoId == turnoId)
+                .OrderBy(e => e.Fecha)
+                .ToListAsync();
+
+            var productos = await _context.Productos
+                .Where(p => p.Activo)
+                .OrderBy(p => p.Marca)
+                .ToListAsync();
+
+            var conteos = await _context.ContesFisicos
+                .Include(c => c.Producto)
+                .Where(c => c.TurnoId == turnoId)
+                .OrderBy(c => c.Fecha)
+                .ToListAsync();
+
+            var movimientos = await _context.MovimientosCaja
+                .Where(m => m.TurnoId == turnoId)
+                .OrderBy(m => m.Fecha)
+                .ToListAsync();
+
+            return ConstruirExcel(ventas, entradas, productos, conteos, movimientos, hoy);
         }
 
+        // Reporte por fecha (histórico)
         public async Task<byte[]> GenerarReportePorFechaAsync(DateTime fecha)
         {
             var hoy = fecha.Date;
@@ -63,13 +86,35 @@ namespace GymPOS.Services
                 .OrderBy(m => m.Fecha)
                 .ToListAsync();
 
-            using var wb = new XLWorkbook();
+            return ConstruirExcel(ventas, entradas, productos, conteos, movimientos, hoy);
+        }
 
+        public async Task<List<DateTime>> GetFechasConRegistrosAsync()
+        {
+            return await _context.MovimientosCaja
+                .Where(m => m.Tipo == "Apertura")
+                .Select(m => m.Fecha.Date)
+                .Distinct()
+                .OrderByDescending(f => f)
+                .ToListAsync();
+        }
+
+        // ===== CONSTRUCCIÓN DEL EXCEL =====
+        private byte[] ConstruirExcel(
+            List<Venta> ventas,
+            List<EntradaProducto> entradas,
+            List<Producto> productos,
+            List<ConteoFisico> conteos,
+            List<MovimientoCaja> movimientos,
+            DateTime fecha)
+        {
+            var hoy = fecha.Date;
             var colorVerde = XLColor.FromHtml("#1B5E20");
-            var colorVerdeClaro = XLColor.FromHtml("#E8F5E9");
             var colorGris = XLColor.FromHtml("#F5F5F5");
             var colorRojo = XLColor.FromHtml("#C62828");
             var colorAzul = XLColor.FromHtml("#0D47A1");
+
+            using var wb = new XLWorkbook();
 
             // ===== HOJA 1: RESUMEN DEL DÍA =====
             var ws1 = wb.Worksheets.Add("Resumen del Día");
@@ -141,7 +186,6 @@ namespace GymPOS.Services
             ws1.Cell(16, 2).Style.NumberFormat.Format = "₡#,##0";
             ws1.Cell(16, 2).Style.Font.Bold = true;
 
-            // Cortes del día
             var cortes = movimientos.Where(m => m.Tipo == "Corte").ToList();
             if (cortes.Any())
             {
@@ -168,7 +212,6 @@ namespace GymPOS.Services
                 }
             }
 
-            // Cierre
             var cierre = movimientos.LastOrDefault(m => m.Tipo == "CierreDefinitivo");
             if (cierre != null)
             {
@@ -179,7 +222,6 @@ namespace GymPOS.Services
                 ws1.Cell(rowCierre, 1).Style.Font.FontColor = XLColor.White;
                 ws1.Range(rowCierre, 1, rowCierre, 6).Merge();
                 rowCierre++;
-
                 ws1.Cell(rowCierre, 1).Value = "Hora cierre";
                 ws1.Cell(rowCierre, 2).Value = cierre.Fecha.ToString("hh:mm tt");
                 rowCierre++;

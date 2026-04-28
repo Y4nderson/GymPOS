@@ -16,14 +16,24 @@
             <p class="text-muted">Debe abrir la caja antes de operar.</p>
         </div>
         <div class="mb-2">
-            <label>Descripción del Turno</label>
-            <input class="form-control" @bind="descripcionApertura" placeholder="Ej: Turno Mañana" />
+            <label>Responsable</label>
+            <input class="form-control" @bind="descripcionApertura" placeholder="Nombre del responsable" />
         </div>
         <div class="mb-3">
             <label>Monto Inicial (₡)</label>
             <input type="number" class="form-control fs-4" @bind="montoInicial" />
         </div>
-        <button class="btn btn-success w-100" @onclick="AbrirCaja">✅ Abrir Caja</button>
+        <button class="btn btn-success w-100" @onclick="AbrirCaja" disabled="@abriendo">
+            @if (abriendo)
+            {
+                <span class="spinner-border spinner-border-sm me-2"></span>
+                <span>Abriendo...</span>
+            }
+            else
+            {
+                <span>✅ Abrir Caja</span>
+            }
+        </button>
     </div>
 }
 else
@@ -116,9 +126,9 @@ else
                         <td>Egresos</td>
                         <td class="text-end text-danger">-₡@totalEgresos.ToString("N0")</td>
                     </tr>
-                    <tr class="fw-bold table-dark">
-                        <td>Total Ventas del Día</td>
-                        <td class="text-end">₡@totalVentas.ToString("N0")</td>
+                    <tr class="fw-bold" style="background:#fff5f5; border-top: 2px solid #e5e7eb;">
+                        <td style="color:#1a1a2e;">Total Ventas del Día</td>
+                        <td class="text-end" style="color:#E31E24;">₡@totalVentas.ToString("N0")</td>
                     </tr>
                 </tbody>
             </table>
@@ -166,7 +176,17 @@ else
                 <label>Monto (₡)</label>
                 <input type="number" class="form-control" @bind="egresoMonto" />
             </div>
-            <button class="btn btn-warning" @onclick="AgregarEgreso">Agregar Egreso</button>
+            <button class="btn btn-warning" @onclick="AgregarEgreso" disabled="@guardandoEgreso">
+                @if (guardandoEgreso)
+                {
+                    <span class="spinner-border spinner-border-sm me-2"></span>
+                    <span>Guardando...</span>
+                }
+                else
+                {
+                    <span>Agregar Egreso</span>
+                }
+            </button>
         </div>
 
         <h6>Egresos del día:</h6>
@@ -254,8 +274,16 @@ else
                 </div>
             }
 
-            <button class="btn btn-primary w-100 mt-2" @onclick="RegistrarCorte">
-                ✂️ Registrar Corte @turnoCorte
+            <button class="btn btn-primary w-100 mt-2" @onclick="RegistrarCorte" disabled="@guardandoCorte">
+                @if (guardandoCorte)
+                {
+                    <span class="spinner-border spinner-border-sm me-2"></span>
+                    <span>Registrando...</span>
+                }
+                else
+                {
+                    <span>✂️ Registrar Corte @turnoCorte</span>
+                }
             </button>
         </div>
 
@@ -266,8 +294,8 @@ else
                 <thead>
                     <tr>
                         <th>Hora</th>
-                        <th>Turno</th>
                         <th>Descripción</th>
+                        <th class="text-end">Monto Contado</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -276,7 +304,7 @@ else
                         <tr>
                             <td>@c.Fecha.ToString("hh:mm tt")</td>
                             <td>@c.Descripcion</td>
-                            <td>₡@c.Monto.ToString("N0")</td>
+                            <td class="text-end">₡@c.Monto.ToString("N0")</td>
                         </tr>
                     }
                 </tbody>
@@ -355,8 +383,16 @@ else
                     </div>
                 }
 
-                <button class="btn btn-danger w-100 mt-2" @onclick="CerrarCaja">
-                    🔒 Cerrar Caja Definitivamente
+                <button class="btn btn-danger w-100 mt-2" @onclick="CerrarCaja" disabled="@cerrando">
+                    @if (cerrando)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                        <span>Cerrando caja...</span>
+                    }
+                    else
+                    {
+                        <span>🔒 Cerrar Caja Definitivamente</span>
+                    }
                 </button>
             </div>
         }
@@ -392,6 +428,12 @@ else
     private string tabActiva = "resumen";
     private string turnoCorte = "Mediodía";
 
+    // Flags anti-doble click
+    private bool abriendo = false;
+    private bool guardandoEgreso = false;
+    private bool guardandoCorte = false;
+    private bool cerrando = false;
+
     protected override async Task OnInitializedAsync()
     {
         await Cargar();
@@ -417,51 +459,64 @@ else
             cortesDelDia = movimientos.Where(m => m.Tipo == "Corte").ToList();
         }
     }
+
     private async Task AbrirCaja()
     {
-        if (string.IsNullOrWhiteSpace(descripcionApertura)) return;
+        if (abriendo || string.IsNullOrWhiteSpace(descripcionApertura)) return;
+        abriendo = true;
         await CajaService.AbrirCajaAsync(montoInicial, descripcionApertura);
-        await Cargar();
-        StateHasChanged();
-        mensaje = "Caja abierta exitosamente.";
-        await Task.Delay(3000);
-        mensaje = null;
+        Navigation.NavigateTo("/caja", forceLoad: true);
     }
 
     private async Task AgregarEgreso()
     {
-        if (string.IsNullOrWhiteSpace(egresoDescripcion) || egresoMonto <= 0) return;
-        await CajaService.AgregarEgresoAsync(egresoDescripcion, egresoMonto);
-        egresoDescripcion = string.Empty;
-        egresoMonto = 0;
-        mensaje = "Egreso registrado.";
-        await Cargar();
-        await Task.Delay(3000);
-        mensaje = null;
+        if (guardandoEgreso || string.IsNullOrWhiteSpace(egresoDescripcion) || egresoMonto <= 0) return;
+        guardandoEgreso = true;
+        try
+        {
+            await CajaService.AgregarEgresoAsync(egresoDescripcion, egresoMonto);
+            egresoDescripcion = string.Empty;
+            egresoMonto = 0;
+            mensaje = "Egreso registrado.";
+            await Cargar();
+            await Task.Delay(3000);
+            mensaje = null;
+        }
+        finally { guardandoEgreso = false; }
     }
 
     private async Task RegistrarCorte()
     {
-        await CajaService.RegistrarCorteAsync(turnoCorte, montoCorte);
-        montoCorte = 0;
-        mensaje = $"✂️ Corte de {turnoCorte} registrado. La caja sigue abierta.";
-        await Cargar();
-        await Task.Delay(3000);
-        mensaje = null;
+        if (guardandoCorte) return;
+        guardandoCorte = true;
+        try
+        {
+            await CajaService.RegistrarCorteAsync(turnoCorte, montoCorte);
+            montoCorte = 0;
+            mensaje = $"✂️ Corte de {turnoCorte} registrado. La caja sigue abierta.";
+            await Cargar();
+            await Task.Delay(3000);
+            mensaje = null;
+        }
+        finally { guardandoCorte = false; }
     }
 
     private async Task CerrarCaja()
     {
-        await CajaService.CerrarCajaAsync(montoFinal);
-
-        var bytes = await ReporteService.GenerarReporteTurnoExcelAsync();
-        var base64 = Convert.ToBase64String(bytes);
-        var fileName = $"Reporte_{DateTime.Now:yyyyMMdd_HHmm}.xlsx";
-        await JS.InvokeVoidAsync("downloadFile", base64, fileName);
-
-        mensaje = "🔒 Caja cerrada definitivamente. Reporte descargado.";
-        await Cargar();
-        await Task.Delay(3000);
-        mensaje = null;
+        if (cerrando) return;
+        cerrando = true;
+        try
+        {
+            await CajaService.CerrarCajaAsync(montoFinal);
+            var bytes = await ReporteService.GenerarReporteTurnoExcelAsync();
+            var base64 = Convert.ToBase64String(bytes);
+            var fileName = $"Reporte_{DateTime.Now:yyyyMMdd_HHmm}.xlsx";
+            await JS.InvokeVoidAsync("downloadFile", base64, fileName);
+            mensaje = "🔒 Caja cerrada definitivamente. Reporte descargado.";
+            await Cargar();
+            await Task.Delay(3000);
+            mensaje = null;
+        }
+        finally { cerrando = false; }
     }
 }

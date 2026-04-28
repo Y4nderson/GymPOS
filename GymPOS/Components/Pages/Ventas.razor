@@ -9,148 +9,214 @@
 
 @if (!cajaAbierta)
 {
-    <div class="alert alert-warning mt-5 text-center">
-        <h4>⚠️ La caja no está abierta</h4>
-        <p>Debe abrir la caja antes de realizar ventas.</p>
-        <button class="btn btn-primary" @onclick='() => Navigation.NavigateTo("/caja")'>
-            Ir a Abrir Caja
-        </button>
+    <div style="max-width:450px;margin:5rem auto;">
+        <div class="card p-4 text-center">
+            <div style="font-size:3rem;margin-bottom:1rem;">🔒</div>
+            <h4>Caja no abierta</h4>
+            <p class="text-muted">Debe abrir la caja antes de realizar ventas.</p>
+            <button class="btn btn-primary mt-2" @onclick='() => Navigation.NavigateTo("/caja")'>
+                Ir a Abrir Caja
+            </button>
+        </div>
     </div>
 }
 else if (mostrarConfirmacion)
 {
-    <div class="card p-4 mt-4" style="max-width:400px;margin:auto">
-        <h4 class="text-center">Confirmar Venta</h4>
-        <div class="text-center mb-3">
-            <span class="fs-1 fw-bold text-success">₡@totalCarrito.ToString("N0")</span>
-        </div>
-        <div class="mb-2">
-            <label>Método de Pago</label>
-            <select class="form-control" @bind="metodoPago">
-                <option>Efectivo</option>
-                <option>SINPE Móvil</option>
-                <option>Tarjeta</option>
-            </select>
-        </div>
-        @if (metodoPago == "Efectivo")
-        {
-            <div class="mb-2">
-                <label>Monto Recibido (₡)</label>
-                <input type="number" class="form-control fs-4" @bind="montoRecibido" />
-            </div>
-            @if (montoRecibido >= totalCarrito)
-            {
-                <div class="alert alert-warning text-center fs-5">
-                    💰 Cambio: ₡@((montoRecibido - totalCarrito).ToString("N0"))
+    <div style="max-width:420px;margin:3rem auto;">
+        <div class="card p-4">
+            <h4 class="text-center mb-1" style="font-family:'Outfit',sans-serif;">Confirmar Venta</h4>
+            <p class="text-center text-muted small mb-3">Revisa el resumen antes de cobrar</p>
+
+            <div class="text-center mb-3 p-3" style="background:#fff5f5;border-radius:12px;border:2px solid #E31E24;">
+                <div class="text-muted small mb-1">TOTAL A COBRAR</div>
+                <div style="font-size:2.5rem;font-weight:700;color:#E31E24;font-family:'Outfit',sans-serif;">
+                    ₡@totalCarrito.ToString("N0")
                 </div>
+            </div>
+
+            <div class="mb-3">
+                <label>Método de Pago</label>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:6px;">
+                    @foreach (var metodo in new[] { "Efectivo", "SINPE Móvil", "Tarjeta" })
+                    {
+                        <button class="btn @(metodoPago == metodo ? "btn-primary" : "btn-secondary")"
+                                style="font-size:0.8rem;padding:0.6rem 0.5rem;"
+                                @onclick="() => metodoPago = metodo">
+                            @(metodo == "Efectivo" ? "💵" : metodo == "SINPE Móvil" ? "📱" : "💳")
+                            @metodo
+                        </button>
+                    }
+                </div>
+            </div>
+
+            @if (metodoPago == "Efectivo")
+            {
+                <div class="mb-2">
+                    <label>Monto Recibido (₡)</label>
+                    <input type="number" class="form-control" style="font-size:1.5rem;text-align:center;"
+                           @bind="montoRecibido" placeholder="0" />
+                </div>
+                @if (montoRecibido >= totalCarrito)
+                {
+                    <div class="alert alert-success text-center mb-3">
+                        <div class="small">CAMBIO</div>
+                        <div style="font-size:1.5rem;font-weight:700;">₡@((montoRecibido - totalCarrito).ToString("N0"))</div>
+                    </div>
+                }
             }
-        }
-        <button class="btn btn-success w-100 mt-2" @onclick="ProcesarVenta">✅ Confirmar</button>
-        <button class="btn btn-secondary w-100 mt-2" @onclick="() => mostrarConfirmacion = false">← Volver</button>
+
+            <button class="btn btn-success w-100 btn-lg mb-2" @onclick="ProcesarVenta" disabled="@procesando">
+                @if (procesando)
+                {
+                    <span class="spinner-border spinner-border-sm me-2"></span>
+                    <span>Procesando...</span>
+                }
+                else
+                {
+                    <span>✅ Confirmar Cobro</span>
+                }
+            </button>
+            <button class="btn btn-secondary w-100" @onclick="() => mostrarConfirmacion = false" disabled="@procesando">
+                ← Volver al Carrito
+            </button>
+        </div>
     </div>
 }
 else
 {
     <h3>Punto de Venta</h3>
 
-    <div class="row">
+    <div class="row g-4">
+        <!-- IZQUIERDA: Buscador -->
         <div class="col-md-7">
-            <div class="mb-3">
-                <label>Escanear producto</label>
-                <input id="inputScanner" class="form-control form-control-lg"
-                       placeholder="Escanea el código de barra..."
-                       @bind="codigoBusqueda"
-                       @bind:event="oninput"
-                       @onkeydown="OnKeyDown" />
-            </div>
+            <div class="card p-3">
+                <div class="mb-3">
+                    <label>Escanear / Buscar Producto</label>
+                    <input id="inputScanner"
+                           class="form-control"
+                           style="font-size:1.1rem;padding:0.75rem 1rem;"
+                           placeholder="🔍 Escanea el código de barra o escribe el nombre..."
+                           @bind="codigoBusqueda"
+                           @bind:event="oninput"
+                           @onkeydown="OnKeyDown" />
+                </div>
 
-            @if (productosBusqueda != null && productosBusqueda.Any())
-            {
-                <table class="table table-sm table-hover">
-                    <thead>
-                        <tr>
-                            <th>Producto</th>
-                            <th>Precio</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
+                @if (mensajeError != null)
+                {
+                    <div class="alert alert-danger">⚠️ @mensajeError</div>
+                }
+
+                @if (productosBusqueda != null && productosBusqueda.Any())
+                {
+                    <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
                         @foreach (var p in productosBusqueda)
                         {
-                            <tr style="cursor:pointer" @onclick="() => AgregarAlCarrito(p)">
-                                <td>@p.Nombre</td>
-                                <td>₡@p.Precio.ToString("N0")</td>
-                                <td><button class="btn btn-sm btn-primary">+</button></td>
-                            </tr>
+                            <div style="display:flex;align-items:center;justify-content:space-between;padding:0.85rem 1rem;border-bottom:1px solid #f3f4f6;cursor:pointer;transition:background 0.15s;"
+                                 @onclick="() => AgregarAlCarrito(p)"
+                                 @onmouseover="(e) => { }"
+                                 class="table-hover">
+                                <div>
+                                    <div style="font-weight:600;color:#1a1a2e;">@p.Nombre</div>
+                                    <div style="font-size:0.8rem;color:#9ca3af;">Stock: @p.Stock unidades</div>
+                                </div>
+                                <div style="display:flex;align-items:center;gap:12px;">
+                                    <span style="font-weight:700;color:#E31E24;font-size:1.1rem;">₡@p.Precio.ToString("N0")</span>
+                                    <button class="btn btn-primary btn-sm">+ Agregar</button>
+                                </div>
+                            </div>
                         }
-                    </tbody>
-                </table>
-            }
-
-            @if (mensajeError != null)
-            {
-                <div class="alert alert-danger">⚠️ @mensajeError</div>
-            }
+                    </div>
+                }
+                else if (!string.IsNullOrEmpty(codigoBusqueda) && productosBusqueda != null)
+                {
+                    <div class="text-center p-4 text-muted">
+                        <div style="font-size:2rem;">🔍</div>
+                        <div>No se encontró ningún producto</div>
+                    </div>
+                }
+                else if (string.IsNullOrEmpty(codigoBusqueda))
+                {
+                    <div class="text-center p-4" style="color:#d1d5db;">
+                        <div style="font-size:3rem;">📦</div>
+                        <div style="font-size:0.9rem;">Escanea un código de barra o escribe el nombre del producto</div>
+                    </div>
+                }
+            </div>
         </div>
 
+        <!-- DERECHA: Carrito -->
         <div class="col-md-5">
-            <h5>Carrito</h5>
-            @if (!carrito.Any())
-            {
-                <p class="text-muted">No hay productos en el carrito.</p>
-            }
-            else
-            {
-                <table class="table table-sm">
-                    <thead>
-                        <tr>
-                            <th>Producto</th>
-                            <th>Cant</th>
-                            <th>Subtotal</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
+            <div class="card" style="position:sticky;top:1rem;">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>🛒 Carrito</span>
+                    @if (carrito.Any())
+                    {
+                        <span class="badge" style="background:#E31E24;color:white;">@carrito.Sum(i => i.Cantidad) items</span>
+                    }
+                </div>
+
+                @if (!carrito.Any())
+                {
+                    <div class="text-center p-4" style="color:#d1d5db;">
+                        <div style="font-size:3rem;">🛒</div>
+                        <div style="font-size:0.9rem;">El carrito está vacío</div>
+                    </div>
+                }
+                else
+                {
+                    <div style="max-height:350px;overflow-y:auto;">
                         @foreach (var item in carrito)
                         {
-                            <tr>
-                                <td>@item.Producto?.Nombre</td>
-                                <td>
-                                    <input type="number" class="form-control form-control-sm"
-                                           style="width:60px"
-                                           value="@item.Cantidad"
-                                           @onchange="(e) => CambiarCantidad(item, e)" />
-                                </td>
-                                <td>₡@item.Subtotal.ToString("N0")</td>
-                                <td>
-                                    <button class="btn btn-sm btn-danger"
-                                            @onclick="() => EliminarDelCarrito(item)">
-                                        ✕
-                                    </button>
-                                </td>
-                            </tr>
+                            <div style="display:flex;align-items:center;gap:10px;padding:0.75rem 1rem;border-bottom:1px solid #f3f4f6;">
+                                <div style="flex:1;min-width:0;">
+                                    <div style="font-weight:600;font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                                        @item.Producto?.Nombre
+                                    </div>
+                                    <div style="font-size:0.8rem;color:#6b7280;">₡@item.PrecioUnitario.ToString("N0") c/u</div>
+                                </div>
+                                <input type="number" min="1"
+                                       style="width:55px;text-align:center;border:1px solid #e5e7eb;border-radius:8px;padding:4px;"
+                                       value="@item.Cantidad"
+                                       @onchange="(e) => CambiarCantidad(item, e)" />
+                                <div style="font-weight:700;color:#E31E24;min-width:70px;text-align:right;">
+                                    ₡@item.Subtotal.ToString("N0")
+                                </div>
+                                <button class="btn btn-sm btn-danger" style="padding:4px 8px;"
+                                        @onclick="() => EliminarDelCarrito(item)">
+                                    ✕
+                                </button>
+                            </div>
                         }
-                    </tbody>
-                </table>
+                    </div>
 
-                <h4 class="text-end">Total: ₡@totalCarrito.ToString("N0")</h4>
-                <button class="btn btn-success w-100 mt-2 btn-lg"
-                        @onclick="() => mostrarConfirmacion = true">
-                    💳 Cobrar ₡@totalCarrito.ToString("N0")
-                </button>
-                <button class="btn btn-outline-danger w-100 mt-2"
-                        @onclick="LimpiarCarrito">
-                    🗑️ Cancelar Venta
-                </button>
-            }
+                    <div style="padding:1rem;border-top:2px solid #f3f4f6;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+                            <span style="font-size:1rem;color:#6b7280;">Total</span>
+                            <span style="font-size:1.8rem;font-weight:700;color:#E31E24;font-family:'Outfit',sans-serif;">
+                                ₡@totalCarrito.ToString("N0")
+                            </span>
+                        </div>
+                        <button class="btn btn-success w-100 btn-lg mb-2"
+                                @onclick="() => mostrarConfirmacion = true">
+                            💳 Cobrar ₡@totalCarrito.ToString("N0")
+                        </button>
+                        <button class="btn btn-secondary w-100"
+                                @onclick="LimpiarCarrito">
+                            🗑️ Cancelar Venta
+                        </button>
+                    </div>
+                }
+            </div>
         </div>
     </div>
 }
 
 @if (ventaExitosa)
 {
-    <div class="alert alert-success mt-3 text-center fs-5">
-        ✅ Venta registrada exitosamente
+    <div style="position:fixed;bottom:2rem;right:2rem;z-index:9999;">
+        <div class="alert alert-success" style="box-shadow:0 4px 20px rgba(0,0,0,0.15);border-radius:12px;padding:1rem 1.5rem;">
+            ✅ Venta registrada exitosamente
+        </div>
     </div>
 }
 
@@ -163,6 +229,7 @@ else
     private bool mostrarConfirmacion = false;
     private bool ventaExitosa = false;
     private bool cajaAbierta = false;
+    private bool procesando = false;
     private string? mensajeError;
 
     private decimal totalCarrito => carrito.Sum(i => i.Subtotal);
@@ -234,6 +301,7 @@ else
         codigoBusqueda = string.Empty;
         mensajeError = null;
     }
+
     private void CambiarCantidad(DetalleVenta item, ChangeEventArgs e)
     {
         if (int.TryParse(e.Value?.ToString(), out int cantidad) && cantidad > 0)
@@ -257,25 +325,30 @@ else
 
     private async Task ProcesarVenta()
     {
-        if (!carrito.Any()) return;
+        if (procesando || !carrito.Any()) return;
         if (metodoPago == "Efectivo" && montoRecibido < totalCarrito) return;
 
-        var venta = new Venta
+        procesando = true;
+        try
         {
-            Fecha = DateTime.Now,
-            MetodoPago = metodoPago,
-            Total = totalCarrito,
-            Detalles = carrito
-        };
+            var venta = new Venta
+            {
+                Fecha = DateTime.Now,
+                MetodoPago = metodoPago,
+                Total = totalCarrito,
+                Detalles = carrito
+            };
 
-        await VentaService.CrearVentaAsync(venta);
+            await VentaService.CrearVentaAsync(venta);
 
-        LimpiarCarrito();
-        mostrarConfirmacion = false;
-        montoRecibido = 0;
-        ventaExitosa = true;
+            LimpiarCarrito();
+            mostrarConfirmacion = false;
+            montoRecibido = 0;
+            ventaExitosa = true;
 
-        await Task.Delay(3000);
-        ventaExitosa = false;
+            await Task.Delay(3000);
+            ventaExitosa = false;
+        }
+        finally { procesando = false; }
     }
 }

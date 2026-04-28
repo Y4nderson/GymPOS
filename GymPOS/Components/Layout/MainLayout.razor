@@ -1,23 +1,19 @@
 ﻿@inherits LayoutComponentBase
 
 <div class="page">
-    <div class="sidebar">
+    <div class="sidebar" style="background: #1a1a1a !important; background-image: none !important;">
         <NavMenu />
+        <div class="sidebar-footer">
+            GymPOS v1.0 &copy; @DateTime.Now.Year
+        </div>
     </div>
 
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+    <main class="main">
+        <div class="top-row">
+            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">Documentación</a>
         </div>
-
-        <article class="content px-4">
+        <article class="content">
             @Body
         </article>
     </main>
-</div>
-
-<div id="blazor-error-ui">
-    An unhandled error has occurred.
-    <a href="" class="reload">Reload</a>
-    <a class="dismiss">🗙</a>
 </div>
