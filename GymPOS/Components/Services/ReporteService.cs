@@ -20,8 +20,12 @@ namespace GymPOS.Services
         public async Task<byte[]> GenerarReporteTurnoExcelAsync()
         {
             var turnoId = await _cajaService.GetTurnoActivoIdAsync();
-            var hoy = DateTime.Today;
+            return await GenerarReportePorTurnoIdAsync(turnoId);
+        }
 
+        // Reporte por TurnoId específico (usado al cerrar caja)
+        public async Task<byte[]> GenerarReportePorTurnoIdAsync(int turnoId)
+        {
             var ventas = await _context.Ventas
                 .Include(v => v.Detalles).ThenInclude(d => d.Producto)
                 .Where(v => v.TurnoId == turnoId)
@@ -50,7 +54,9 @@ namespace GymPOS.Services
                 .OrderBy(m => m.Fecha)
                 .ToListAsync();
 
-            return ConstruirExcel(ventas, entradas, productos, conteos, movimientos, hoy);
+            var fechaTurno = movimientos.FirstOrDefault()?.Fecha.Date ?? DateTime.Today;
+
+            return ConstruirExcel(ventas, entradas, productos, conteos, movimientos, fechaTurno);
         }
 
         // Reporte por fecha (histórico)

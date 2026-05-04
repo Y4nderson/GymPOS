@@ -11,17 +11,15 @@
 @if (!cajaAbierta)
 {
     <div class="card p-4 mt-4" style="max-width:450px;margin:auto">
-        <div class="text-center mb-3">
-            <h4>💰 Inicio de Caja</h4>
-            <p class="text-muted">Debe abrir la caja antes de operar.</p>
-        </div>
-        <div class="mb-2">
-            <label>Responsable</label>
-            <input class="form-control" @bind="descripcionApertura" placeholder="Nombre del responsable" />
+        <div class="text-center mb-4">
+            <div style="font-size:3rem;">💰</div>
+            <h4>Inicio de Caja</h4>
+            <p class="text-muted">Ingrese el monto inicial para comenzar operaciones.</p>
         </div>
         <div class="mb-3">
             <label>Monto Inicial (₡)</label>
-            <input type="number" class="form-control fs-4" @bind="montoInicial" />
+            <input type="number" class="form-control" style="font-size:1.5rem;text-align:center;"
+                   @bind="montoInicial" placeholder="0" />
         </div>
         <button class="btn btn-success w-100" @onclick="AbrirCaja" disabled="@abriendo">
             @if (abriendo)
@@ -407,7 +405,6 @@ else
 @code {
     private bool cajaAbierta = false;
     private bool cajaCerradaDefinitivamente = false;
-    private string descripcionApertura = string.Empty;
     private decimal montoInicial = 0;
     private decimal montoFinal = 0;
     private decimal montoCorte = 0;
@@ -462,9 +459,11 @@ else
 
     private async Task AbrirCaja()
     {
-        if (abriendo || string.IsNullOrWhiteSpace(descripcionApertura)) return;
+        if (abriendo) return;
         abriendo = true;
-        await CajaService.AbrirCajaAsync(montoInicial, descripcionApertura);
+        // Descripción automática con fecha y hora hasta que implementemos login
+        var descripcion = $"Apertura {DateTime.Now:dd/MM/yyyy hh:mm tt}";
+        await CajaService.AbrirCajaAsync(montoInicial, descripcion);
         Navigation.NavigateTo("/caja", forceLoad: true);
     }
 
@@ -507,10 +506,10 @@ else
         cerrando = true;
         try
         {
-            await CajaService.CerrarCajaAsync(montoFinal);
-            var bytes = await ReporteService.GenerarReporteTurnoExcelAsync();
+            var turnoId = await CajaService.CerrarCajaAsync(montoFinal);
+            var bytes = await ReporteService.GenerarReportePorTurnoIdAsync(turnoId);
             var base64 = Convert.ToBase64String(bytes);
-            var fileName = $"Reporte_{DateTime.Now:yyyyMMdd_HHmm}.xlsx";
+            var fileName = $"Reporte_InlineGym_{DateTime.Now:yyyyMMdd_HHmm}.xlsx";
             await JS.InvokeVoidAsync("downloadFile", base64, fileName);
             mensaje = "🔒 Caja cerrada definitivamente. Reporte descargado.";
             await Cargar();

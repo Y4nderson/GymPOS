@@ -1,0 +1,187 @@
+﻿@page "/usuarios"
+@using GymPOS.Models
+@using GymPOS.Services
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
+@inject AuthService AuthService
+@rendermode InteractiveServer
+
+<h3>👥 Usuarios</h3>
+
+<button class="btn btn-primary mb-3" @onclick="NuevoUsuario">+ Nuevo Usuario</button>
+
+@if (usuarios == null)
+{
+    <p>Cargando...</p>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Email</th>
+                <th>Rol</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var u in usuarios)
+            {
+                <tr>
+                    <td>@u.Nombre</td>
+                    <td>@u.Email</td>
+                    <td>
+                        <span class="badge @(u.Rol == "Admin" ? "bg-danger" : "bg-success")">
+                            @u.Rol
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge @(u.Activo ? "bg-success" : "bg-danger")">
+                            @(u.Activo ? "Activo" : "Inactivo")
+                        </span>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-warning" @onclick="() => Editar(u)">Editar</button>
+                        @if (u.Rol != "Admin")
+                        {
+                            <button class="btn btn-sm btn-danger ms-1" @onclick="() => Eliminar(u.Id)">Desactivar</button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@if (mostrarFormulario)
+{
+    <div class="card p-4 mt-3" style="max-width:500px">
+        <h5>@(usuarioActual.Id == 0 ? "Nuevo Usuario" : "Editar Usuario")</h5>
+
+        <div class="mb-2">
+            <label>Nombre</label>
+            <input class="form-control" @bind="usuarioActual.Nombre" />
+        </div>
+        <div class="mb-2">
+            <label>Email</label>
+            <input type="email" class="form-control" @bind="usuarioActual.Email" />
+        </div>
+        <div class="mb-2">
+            <label>@(usuarioActual.Id == 0 ? "Contraseña" : "Nueva Contraseña (dejar vacío para no cambiar)")</label>
+            <input type="password" class="form-control" @bind="password" placeholder="••••••••" />
+        </div>
+        <div class="mb-3">
+            <label>Rol</label>
+            <select class="form-control" @bind="usuarioActual.Rol">
+                <option value="Cajero">Cajero</option>
+                <option value="Admin">Admin</option>
+            </select>
+        </div>
+
+        @if (errorMensaje != null)
+        {
+            <div class="alert alert-danger">@errorMensaje</div>
+        }
+
+        <button class="btn btn-success" @onclick="Guardar" disabled="@guardando">
+            @(guardando ? "Guardando..." : "Guardar")
+        </button>
+        <button class="btn btn-secondary ms-2" @onclick="Cancelar">Cancelar</button>
+    </div>
+}
+
+@if (mensaje != null)
+{
+    <div class="alert alert-success mt-3">✅ @mensaje</div>
+}
+
+@code {
+    private List<Usuario>? usuarios;
+    private Usuario usuarioActual = new();
+    private string password = string.Empty;
+    private bool mostrarFormulario = false;
+    private bool guardando = false;
+    private string? mensaje;
+    private string? errorMensaje;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Cargar();
+    }
+
+    private async Task Cargar()
+    {
+        usuarios = await AuthService.GetAllAsync();
+    }
+
+    private void NuevoUsuario()
+    {
+        usuarioActual = new Usuario();
+        password = string.Empty;
+        errorMensaje = null;
+        mostrarFormulario = true;
+    }
+
+    private void Editar(Usuario u)
+    {
+        usuarioActual = new Usuario
+        {
+            Id = u.Id,
+            Nombre = u.Nombre,
+            Email = u.Email,
+            Rol = u.Rol,
+            Activo = u.Activo,
+            PasswordHash = u.PasswordHash
+        };
+        password = string.Empty;
+        errorMensaje = null;
+        mostrarFormulario = true;
+    }
+
+    private async Task Guardar()
+    {
+        if (string.IsNullOrWhiteSpace(usuarioActual.Nombre) || string.IsNullOrWhiteSpace(usuarioActual.Email))
+        {
+            errorMensaje = "Nombre y email son obligatorios.";
+            return;
+        }
+
+        if (usuarioActual.Id == 0 && string.IsNullOrWhiteSpace(password))
+        {
+            errorMensaje = "La contraseña es obligatoria para nuevos usuarios.";
+            return;
+        }
+
+        guardando = true;
+        try
+        {
+            if (usuarioActual.Id == 0)
+                await AuthService.CrearAsync(usuarioActual, password);
+            else
+                await AuthService.ActualizarAsync(usuarioActual, string.IsNullOrEmpty(password) ? null : password);
+
+            mostrarFormulario = false;
+            mensaje = "Usuario guardado correctamente.";
+            await Cargar();
+            await Task.Delay(3000);
+            mensaje = null;
+        }
+        finally { guardando = false; }
+    }
+
+    private async Task Eliminar(int id)
+    {
+        await AuthService.EliminarAsync(id);
+        mensaje = "Usuario desactivado.";
+        await Cargar();
+        await Task.Delay(3000);
+        mensaje = null;
+    }
+
+    private void Cancelar()
+    {
+        mostrarFormulario = false;
+        errorMensaje = null;
+    }
+}

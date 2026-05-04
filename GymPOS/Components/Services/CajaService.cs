@@ -125,12 +125,13 @@ namespace GymPOS.Services
         }
 
         // Solo el cierre definitivo cierra la caja
-        public async Task CerrarCajaAsync(decimal montoFinal)
+        public async Task<int> CerrarCajaAsync(decimal montoFinal)
         {
             var turnoId = await GetTurnoActivoIdAsync();
             var totalEfectivo = await GetTotalPorMetodoAsync("Efectivo");
             var apertura = await _context.MovimientosCaja
-                .Where(m => m.Fecha.Date == DateTime.Today && m.Tipo == "Apertura")
+                .Where(m => m.Fecha.Date == DateTime.Now.Date && m.Tipo == "Apertura")
+                .OrderByDescending(m => m.Fecha)
                 .FirstOrDefaultAsync();
             var montoInicial = apertura?.Monto ?? 0;
             var diferencia = montoFinal - (montoInicial + totalEfectivo);
@@ -144,8 +145,8 @@ namespace GymPOS.Services
                 TurnoId = turnoId
             });
             await _context.SaveChangesAsync();
+            return turnoId;
         }
-
         // Caja abierta = hay apertura hoy sin cierre definitivo
         public async Task<bool> CajaAbiertaHoyAsync()
         {

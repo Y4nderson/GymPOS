@@ -1,16 +1,35 @@
 ﻿@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Authorization
 
 <div class="page">
-    <div class="sidebar" style="background: #1a1a1a !important; background-image: none !important;">
+    <div class="sidebar" style="background:#1a1a1a !important; background-image:none !important;">
         <NavMenu />
         <div class="sidebar-footer">
-            GymPOS v1.0 &copy; @DateTime.Now.Year
+            <AuthorizeView>
+                <Authorized>
+                    <div style="color:rgba(255,255,255,0.5);font-size:0.72rem;margin-bottom:0.5rem;">
+                        👤 @context.User.Identity?.Name
+                    </div>
+                    <a href="/account/logout" style="color:#E31E24;font-size:0.72rem;text-decoration:none;font-weight:600;">
+                        Cerrar Sesión
+                    </a>
+                </Authorized>
+            </AuthorizeView>
+            <div style="margin-top:0.5rem;">GymPOS v1.0 &copy; @DateTime.Now.Year</div>
         </div>
     </div>
 
     <main class="main">
         <div class="top-row">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">Documentación</a>
+            <AuthorizeView>
+                <Authorized>
+                    <span style="font-size:0.8rem;color:#6b7280;">
+                        👤 <strong>@context.User.Identity?.Name</strong>
+                        &nbsp;·&nbsp;
+                        <span style="color:#E31E24;">@context.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value</span>
+                    </span>
+                </Authorized>
+            </AuthorizeView>
         </div>
         <article class="content">
             @Body

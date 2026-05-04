@@ -1,23 +1,16 @@
 ﻿@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Components.Authorization
 
-<style>
-    ::deep .sidebar,
-    .sidebar {
-        background: #1a1a1a !important;
-        background-image: none !important;
-    }
-
-</style>
 <a class="navbar-brand" href="">
-    <img src="logo.jpg" alt="Inline Gym" style="width:42px; height:42px; border-radius:10px; object-fit:cover;" />
+    <div class="brand-icon">💪</div>
     <div class="brand-text">
-        <span class="brand-name">Gimnasio InLine</span>
+        <span class="brand-name">In Line</span>
+        <span class="brand-subtitle">Sistema POS</span>
     </div>
 </a>
 
 <nav class="nav-scrollable">
     <div class="nav-section-title">Principal</div>
-
     <div class="nav-item">
         <NavLink class="nav-link" href="ventas">
             <span class="bi bi-cart3"></span> Ventas
@@ -30,7 +23,6 @@
     </div>
 
     <div class="nav-section-title">Inventario</div>
-
     <div class="nav-item">
         <NavLink class="nav-link" href="inventario">
             <span class="bi bi-boxes"></span> Inventario
@@ -48,10 +40,20 @@
     </div>
 
     <div class="nav-section-title">Reportes</div>
-
     <div class="nav-item">
         <NavLink class="nav-link" href="reportes">
             <span class="bi bi-file-earmark-excel"></span> Reportes
         </NavLink>
     </div>
+
+    <AuthorizeView Roles="Admin">
+        <Authorized>
+            <div class="nav-section-title">Administración</div>
+            <div class="nav-item">
+                <NavLink class="nav-link" href="usuarios">
+                    <span class="bi bi-people"></span> Usuarios
+                </NavLink>
+            </div>
+        </Authorized>
+    </AuthorizeView>
 </nav>

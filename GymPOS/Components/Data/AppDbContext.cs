@@ -14,5 +14,6 @@ namespace GymPOS.Data
         public DbSet<DetalleVenta> DetallesVenta { get; set; }
         public DbSet<EntradaProducto> EntradasProducto { get; set; }
         public DbSet<ConteoFisico> ContesFisicos { get; set; }
+        public DbSet<Usuario> Usuarios { get; set; }
     }
 }

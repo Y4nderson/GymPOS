@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -20,6 +20,29 @@
             link.download = fileName;
             link.click();
         }
+    </script>
+
+    <script>
+        window.registerHotkeys = (dotnetRef) => {
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'F2') {
+                    e.preventDefault();
+                    dotnetRef.invokeMethodAsync('OnF2');
+                }
+                if (e.key === 'F3') {
+                    e.preventDefault();
+                    dotnetRef.invokeMethodAsync('OnF3');
+                }
+                if (e.key === 'Escape') {
+                    dotnetRef.invokeMethodAsync('OnEscape');
+                }
+            });
+        };
+
+        window.focusScanner = () => {
+            const input = document.getElementById('inputScanner');
+            if (input) input.focus();
+        };
     </script>
 </body>
 </html>
