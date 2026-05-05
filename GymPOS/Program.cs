@@ -40,6 +40,7 @@ builder.Services.AddScoped<EntradaService>();
 builder.Services.AddScoped<ConteoService>();
 builder.Services.AddScoped<ReporteService>();
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<DashboardService>();
 
 var app = builder.Build();
 

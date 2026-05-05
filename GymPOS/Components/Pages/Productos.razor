@@ -7,82 +7,282 @@
 
 <h3>Productos</h3>
 
-<button class="btn btn-primary mb-3" @onclick="NuevoProducto">+ Nuevo Producto</button>
+<!-- ===== BARRA DE HERRAMIENTAS ===== -->
+<div style="display:flex;gap:12px;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap;">
+    <div style="flex:1;min-width:200px;position:relative;">
+        <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#9ca3af;">🔍</span>
+        <input class="form-control" style="padding-left:2.2rem;"
+               placeholder="Buscar por nombre, marca, tipo..."
+               @bind="busqueda" @bind:event="oninput" />
+    </div>
+    <button class="btn btn-primary" @onclick="NuevoProducto">
+        + Nuevo Producto
+    </button>
+</div>
 
+<!-- ===== TABLA ===== -->
 @if (productos == null)
 {
-    <p>Cargando...</p>
+    <div class="text-center p-5">
+        <div class="spinner-border" style="color:#E31E24;"></div>
+        <div class="mt-2 text-muted">Cargando productos...</div>
+    </div>
+}
+else if (!productosFiltrados.Any())
+{
+    <div class="card p-4 text-center">
+        <div style="font-size:3rem;">📦</div>
+        <div class="text-muted mt-2">No se encontraron productos</div>
+    </div>
 }
 else
 {
-    <table class="table table-striped">
-        <thead>
-            <tr>
-                <th>Nombre</th>
-                <th>Código Barra</th>
-                <th>Precio</th>
-                <th>Stock</th>
-                <th>Acciones</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var p in productos)
-            {
+    <div class="card" style="overflow:hidden;">
+        <table class="table table-hover mb-0">
+            <thead>
                 <tr>
-                    <td>@p.Nombre</td>
-                    <td>@p.CodigoBarra</td>
-                    <td>₡@p.Precio.ToString("N0")</td>
-                    <td>@p.Stock</td>
-                    <td>
-                        <button class="btn btn-sm btn-warning" @onclick="() => Editar(p)">Editar</button>
-                        <button class="btn btn-sm btn-danger" @onclick="() => Eliminar(p.Id)">Eliminar</button>
-                    </td>
+                    <th>Producto</th>
+                    <th>Código Barra</th>
+                    <th>Precio</th>
+                    <th>Stock</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
                 </tr>
-            }
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                @foreach (var p in productosPaginados)
+                {
+                    <tr>
+                        <td>
+                            <div style="font-weight:600;">@p.Nombre</div>
+                            <div style="font-size:0.75rem;color:#9ca3af;">@p.Tipo · @p.Marca</div>
+                        </td>
+                        <td>
+                            @if (!string.IsNullOrEmpty(p.CodigoBarra))
+                            {
+                                <span class="badge" style="background:#fef2f2;color:#E31E24;border:1px solid #fecaca;font-family:monospace;">
+                                    @p.CodigoBarra
+                                </span>
+                            }
+                            else
+                            {
+                                <span style="color:#d1d5db;font-size:0.8rem;">Sin código</span>
+                            }
+                        </td>
+                        <td style="font-weight:700;color:#E31E24;">₡@p.Precio.ToString("N0")</td>
+                        <td>
+                            <span class="badge @(p.Stock <= p.StockMinimo ? "bg-danger" : "bg-success")">
+                                @p.Stock unid.
+                            </span>
+                        </td>
+                        <td>
+                            @if (p.Stock <= p.StockMinimo)
+                            {
+                                <span style="color:#E31E24;font-size:0.8rem;">⚠️ Stock bajo</span>
+                            }
+                            else
+                            {
+                                <span style="color:#10b981;font-size:0.8rem;">✅ OK</span>
+                            }
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-warning me-1" @onclick="() => Editar(p)">
+                                ✏️ Editar
+                            </button>
+                            <button class="btn btn-sm btn-danger" @onclick="() => ConfirmarEliminar(p)">
+                                🗑️
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <!-- ===== PAGINACIÓN ===== -->
+    @if (totalPaginas > 1)
+    {
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem;">
+            <div style="font-size:0.85rem;color:#6b7280;">
+                Mostrando @((paginaActual - 1) * itemsPorPagina + 1) - @Math.Min(paginaActual * itemsPorPagina, productosFiltrados.Count) de @productosFiltrados.Count productos
+            </div>
+            <div style="display:flex;gap:6px;">
+                <button class="btn btn-sm btn-secondary" @onclick="() => CambiarPagina(paginaActual - 1)"
+                        disabled="@(paginaActual == 1)">
+                    ←
+                </button>
+                @for (int i = 1; i <= totalPaginas; i++)
+                {
+                    var pagina = i;
+                    <button class="btn btn-sm @(pagina == paginaActual ? "btn-primary" : "btn-secondary")"
+                            @onclick="() => CambiarPagina(pagina)">
+                        @pagina
+                    </button>
+                }
+                <button class="btn btn-sm btn-secondary" @onclick="() => CambiarPagina(paginaActual + 1)"
+                        disabled="@(paginaActual == totalPaginas)">
+                    →
+                </button>
+            </div>
+        </div>
+    }
 }
 
-@if (mostrarFormulario)
+<!-- ===== MODAL EDITAR/CREAR ===== -->
+@if (mostrarModal)
 {
-    <div class="card p-3 mt-3">
-        <h5>@(productoActual.Id == 0 ? "Nuevo Producto" : "Editar Producto")</h5>
+    <div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:1rem;"
+         @onclick="CerrarModalFondo">
+        <div style="background:white;border-radius:16px;width:100%;max-width:520px;box-shadow:0 20px 60px rgba(0,0,0,0.2);overflow:hidden;"
+             @onclick:stopPropagation="true">
 
-        <div class="mb-2">
-            <label>Tipo</label>
-            <input class="form-control" @bind="productoActual.Tipo" />
-        </div>
-        <div class="mb-2">
-            <label>Marca</label>
-            <input class="form-control" @bind="productoActual.Marca" />
-        </div>
-        <div class="mb-2">
-            <label>Descripción</label>
-            <input class="form-control" @bind="productoActual.Descripcion" />
-        </div>
-        <div class="mb-2">
-            <label>Capacidad</label>
-            <input class="form-control" @bind="productoActual.Capacidad" />
-        </div>
-        <div class="mb-2">
-            <label>Código de Barra</label>
-            <input class="form-control" @bind="productoActual.CodigoBarra" />
-        </div>
-        <div class="mb-2">
-            <label>Precio (₡)</label>
-            <input class="form-control" type="number" @bind="productoActual.Precio" />
-        </div>
-     
+            <!-- Header modal -->
+            <div style="background:linear-gradient(135deg,#b01519,#E31E24);padding:1.25rem 1.5rem;display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:1.1rem;color:white;">
+                        @(productoActual.Id == 0 ? "➕ Nuevo Producto" : "✏️ Editar Producto")
+                    </div>
+                    <div style="font-size:0.75rem;color:rgba(255,255,255,0.7);">
+                        @(productoActual.Id == 0 ? "Completa los datos del nuevo producto" : $"Editando: {productoActual.Nombre}")
+                    </div>
+                </div>
+                <button @onclick="Cancelar"
+                        style="background:rgba(255,255,255,0.2);border:none;color:white;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:1rem;">
+                    ✕
+                </button>
+            </div>
 
-        <button class="btn btn-success" @onclick="Guardar">Guardar</button>
-        <button class="btn btn-secondary ms-2" @onclick="Cancelar">Cancelar</button>
+            <!-- Body modal -->
+            <div style="padding:1.5rem;">
+                <div class="row g-3">
+                    <div class="col-6">
+                        <label>Tipo</label>
+                        <input class="form-control" @bind="productoActual.Tipo" placeholder="Ej: Bebida" />
+                    </div>
+                    <div class="col-6">
+                        <label>Marca</label>
+                        <input class="form-control" @bind="productoActual.Marca" placeholder="Ej: Monster" />
+                    </div>
+                    <div class="col-8">
+                        <label>Descripción</label>
+                        <input class="form-control" @bind="productoActual.Descripcion" placeholder="Ej: Energética" />
+                    </div>
+                    <div class="col-4">
+                        <label>Capacidad</label>
+                        <input class="form-control" @bind="productoActual.Capacidad" placeholder="Ej: 500ml" />
+                    </div>
+                    <div class="col-12">
+                        <label>Código de Barra</label>
+                        <input class="form-control" @bind="productoActual.CodigoBarra"
+                               placeholder="Escanea o escribe el código" style="font-family:monospace;" />
+                    </div>
+                    <div class="col-6">
+                        <label>Precio (₡)</label>
+                        <input class="form-control" type="number" @bind="productoActual.Precio" />
+                    </div>
+                    <div class="col-6">
+                        <label>Stock Mínimo</label>
+                        <input class="form-control" type="number" @bind="productoActual.StockMinimo" />
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(errorMensaje))
+                {
+                    <div class="alert alert-danger mt-3">⚠️ @errorMensaje</div>
+                }
+
+                <!-- Preview nombre -->
+                @if (!string.IsNullOrEmpty(productoActual.Tipo) || !string.IsNullOrEmpty(productoActual.Marca))
+                {
+                    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:0.75rem;margin-top:1rem;">
+                        <div style="font-size:0.75rem;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;">Vista previa del nombre</div>
+                        <div style="font-weight:700;color:#E31E24;margin-top:4px;">
+                            @productoActual.Nombre
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- Footer modal -->
+            <div style="padding:1rem 1.5rem;border-top:1px solid #fbd5d5;display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" @onclick="Cancelar" disabled="@guardando">
+                    Cancelar
+                </button>
+                <button class="btn btn-success" @onclick="Guardar" disabled="@guardando">
+                    @if (guardando)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                        <span>Guardando...</span>
+                    }
+                    else
+                    {
+                        <span>💾 Guardar</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ===== MODAL CONFIRMAR ELIMINAR ===== -->
+@if (productoAEliminar != null)
+{
+    <div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:1rem;">
+        <div style="background:white;border-radius:16px;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,0.2);overflow:hidden;">
+            <div style="background:linear-gradient(135deg,#b01519,#E31E24);padding:1.25rem 1.5rem;">
+                <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:1.1rem;color:white;">🗑️ Eliminar Producto</div>
+            </div>
+            <div style="padding:1.5rem;text-align:center;">
+                <div style="font-size:3rem;margin-bottom:1rem;">⚠️</div>
+                <div style="font-weight:600;margin-bottom:0.5rem;">¿Estás seguro?</div>
+                <div style="color:#6b7280;font-size:0.9rem;">
+                    Vas a desactivar <strong>@productoAEliminar.Nombre</strong>. Esta acción no se puede deshacer.
+                </div>
+            </div>
+            <div style="padding:1rem 1.5rem;border-top:1px solid #fbd5d5;display:flex;gap:10px;justify-content:flex-end;">
+                <button class="btn btn-secondary" @onclick="() => productoAEliminar = null">Cancelar</button>
+                <button class="btn btn-danger" @onclick="EliminarConfirmado">🗑️ Eliminar</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (mensaje != null)
+{
+    <div style="position:fixed;bottom:2rem;right:2rem;z-index:9999;">
+        <div class="alert alert-success" style="box-shadow:0 4px 20px rgba(0,0,0,0.15);border-radius:12px;padding:1rem 1.5rem;">
+            ✅ @mensaje
+        </div>
     </div>
 }
 
 @code {
     private List<Producto>? productos;
     private Producto productoActual = new();
-    private bool mostrarFormulario = false;
+    private Producto? productoAEliminar = null;
+    private bool mostrarModal = false;
+    private bool guardando = false;
+    private string busqueda = string.Empty;
+    private string? mensaje;
+    private string? errorMensaje;
+    private int paginaActual = 1;
+    private int itemsPorPagina = 10;
+
+    private List<Producto> productosFiltrados => productos == null ? new() :
+        productos.Where(p =>
+            string.IsNullOrEmpty(busqueda) ||
+            p.Nombre.Contains(busqueda, StringComparison.OrdinalIgnoreCase) ||
+            p.Marca.Contains(busqueda, StringComparison.OrdinalIgnoreCase) ||
+            p.Tipo.Contains(busqueda, StringComparison.OrdinalIgnoreCase) ||
+            (p.CodigoBarra?.Contains(busqueda, StringComparison.OrdinalIgnoreCase) ?? false)
+        ).ToList();
+
+    private List<Producto> productosPaginados => productosFiltrados
+        .Skip((paginaActual - 1) * itemsPorPagina)
+        .Take(itemsPorPagina)
+        .ToList();
+
+    private int totalPaginas => (int)Math.Ceiling(productosFiltrados.Count / (double)itemsPorPagina);
 
     protected override async Task OnInitializedAsync()
     {
@@ -94,10 +294,17 @@ else
         productos = await ProductoService.GetAllAsync();
     }
 
+    private void CambiarPagina(int pagina)
+    {
+        if (pagina >= 1 && pagina <= totalPaginas)
+            paginaActual = pagina;
+    }
+
     private void NuevoProducto()
     {
         productoActual = new Producto();
-        mostrarFormulario = true;
+        errorMensaje = null;
+        mostrarModal = true;
     }
 
     private void Editar(Producto p)
@@ -112,30 +319,63 @@ else
             CodigoBarra = p.CodigoBarra,
             Precio = p.Precio,
             Stock = p.Stock,
-            StockMinimo = p.StockMinimo
+            StockMinimo = p.StockMinimo,
+            Activo = p.Activo
         };
-        mostrarFormulario = true;
+        errorMensaje = null;
+        mostrarModal = true;
     }
 
     private async Task Guardar()
     {
-        if (productoActual.Id == 0)
-            await ProductoService.AddAsync(productoActual);
-        else
-            await ProductoService.UpdateAsync(productoActual);
+        if (string.IsNullOrWhiteSpace(productoActual.Tipo) || string.IsNullOrWhiteSpace(productoActual.Marca))
+        {
+            errorMensaje = "Tipo y Marca son obligatorios.";
+            return;
+        }
 
-        mostrarFormulario = false;
-        await CargarProductos();
+        guardando = true;
+        try
+        {
+            if (productoActual.Id == 0)
+                await ProductoService.AddAsync(productoActual);
+            else
+                await ProductoService.UpdateAsync(productoActual);
+
+            mostrarModal = false;
+            await CargarProductos();
+            mensaje = productoActual.Id == 0 ? "Producto creado." : "Producto actualizado.";
+            await Task.Delay(3000);
+            mensaje = null;
+        }
+        finally { guardando = false; }
     }
 
-    private async Task Eliminar(int id)
+    private void ConfirmarEliminar(Producto p)
     {
-        await ProductoService.DeleteAsync(id);
+        productoAEliminar = p;
+    }
+
+    private async Task EliminarConfirmado()
+    {
+        if (productoAEliminar == null) return;
+        await ProductoService.DeleteAsync(productoAEliminar.Id);
+        productoAEliminar = null;
         await CargarProductos();
+        mensaje = "Producto eliminado.";
+        await Task.Delay(3000);
+        mensaje = null;
     }
 
     private void Cancelar()
     {
-        mostrarFormulario = false;
+        mostrarModal = false;
+        errorMensaje = null;
+    }
+
+    private void CerrarModalFondo()
+    {
+        mostrarModal = false;
+        errorMensaje = null;
     }
 }

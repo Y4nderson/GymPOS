@@ -1,7 +1,321 @@
 ﻿@page "/"
+@using GymPOS.Services
+@using GymPOS.Models
+@inject DashboardService DashboardService
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Dashboard — Inline Gym</PageTitle>
 
-<h1>Hello, world!</h1>
+@if (cargando)
+{
+    <div class="text-center p-5">
+        <div class="spinner-border" style="color:#E31E24;"></div>
+        <div class="mt-2 text-muted">Cargando dashboard...</div>
+    </div>
+}
+else
+{
+    <h3>Dashboard</h3>
 
-Welcome to your new app.
+    <!-- ===== KPI CARDS ===== -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card p-3 h-100" style="border-left: 4px solid #E31E24 !important;">
+                <div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;color:#9ca3af;font-weight:600;">Ventas Hoy</div>
+                <div style="font-size:2rem;font-weight:700;color:#E31E24;font-family:'Outfit',sans-serif;">₡@ventasHoy.ToString("N0")</div>
+                <div style="font-size:0.8rem;color:#6b7280;">@productosVendidosHoy productos vendidos</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card p-3 h-100" style="border-left: 4px solid #10b981 !important;">
+                <div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;color:#9ca3af;font-weight:600;">Ventas del Mes</div>
+                <div style="font-size:2rem;font-weight:700;color:#10b981;font-family:'Outfit',sans-serif;">₡@ventasMes.ToString("N0")</div>
+                <div style="font-size:0.8rem;color:#6b7280;">
+                    @if (ventasMesAnterior > 0)
+                    {
+                        var diff = ((ventasMes - ventasMesAnterior) / ventasMesAnterior) * 100;
+                        <span style="color:@(diff >= 0 ? "#10b981" : "#E31E24")">
+                            @(diff >= 0 ? "▲" : "▼") @Math.Abs(diff).ToString("N1")% vs mes anterior
+                        </span>
+                    }
+                    else
+                    {
+                        <span>Primer mes de registros</span>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card p-3 h-100" style="border-left: 4px solid #f59e0b !important;">
+                <div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;color:#9ca3af;font-weight:600;">Más Vendido Hoy</div>
+                <div style="font-size:1.2rem;font-weight:700;color:#d97706;font-family:'Outfit',sans-serif;">🏆 @productoMasVendidoHoy</div>
+                <div style="font-size:0.8rem;color:#6b7280;">Producto estrella del día</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card p-3 h-100" style="border-left: 4px solid @(productosBajoStock > 0 ? "#E31E24" : "#10b981") !important;">
+                <div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;color:#9ca3af;font-weight:600;">Stock Bajo</div>
+                <div style="font-size:2rem;font-weight:700;color:@(productosBajoStock > 0 ? "#E31E24" : "#10b981");font-family:'Outfit',sans-serif;">@productosBajoStock</div>
+                <div style="font-size:0.8rem;color:#6b7280;">
+                    @if (productosBajoStock > 0)
+                    {
+                        <span style="color:#E31E24;">⚠️ Productos requieren reabastecimiento</span>
+                    }
+                    else
+                    {
+                        <span style="color:#10b981;">✅ Todo el inventario OK</span>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== ESTADO CAJA ===== -->
+    <div class="row g-3 mb-4">
+        <div class="col-12">
+            <div class="card p-3" style="background: @(cajaAbierta ? "#ecfdf5" : "#fff5f5") !important; border-color: @(cajaAbierta ? "#a7f3d0" : "#fecaca") !important;">
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <div style="font-size:2rem;">@(cajaAbierta ? "🟢" : "🔴")</div>
+                    <div>
+                        <div style="font-weight:700;font-family:'Outfit',sans-serif;color:@(cajaAbierta ? "#065f46" : "#991b1b");">
+                            @(cajaAbierta ? "Caja Abierta" : "Caja Cerrada")
+                        </div>
+                        <div style="font-size:0.85rem;color:#6b7280;">
+                            @(cajaAbierta ? "El sistema está listo para recibir ventas." : "Debe abrir la caja antes de realizar ventas.")
+                        </div>
+                    </div>
+                    @if (!cajaAbierta)
+                    {
+                        <button class="btn btn-primary ms-auto" @onclick='() => Navigation.NavigateTo("/caja")'>
+                            Abrir Caja
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-success ms-auto" @onclick='() => Navigation.NavigateTo("/ventas")'>
+                            Ir a Ventas
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== GRÁFICOS ===== -->
+    <div class="row g-3 mb-4">
+        <!-- Ventas últimos 7 días -->
+        <div class="col-md-8">
+            <div class="card p-3 h-100">
+                <h5>📈 Ventas Últimos 7 Días</h5>
+                <canvas id="chartVentas" height="500"></canvas>
+            </div>
+        </div>
+        <!-- Ventas por método -->
+        <div class="col-md-4">
+            <div class="card p-3 h-100">
+                <h5>💳 Ventas por Método (Mes)</h5>
+                <canvas id="chartMetodos" height="200"></canvas>
+                <div class="mt-3">
+                    @foreach (var m in ventasPorMetodo)
+                    {
+                        <div style="display:flex;justify-content:space-between;padding:0.3rem 0;border-bottom:1px solid #fbd5d5;">
+                            <span style="font-size:0.85rem;color:#6b7280;">
+                                @(m.Key == "Efectivo" ? "💵" : m.Key == "SINPE Móvil" ? "📱" : "💳") @m.Key
+                            </span>
+                            <span style="font-weight:700;color:#E31E24;">₡@m.Value.ToString("N0")</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== RANKINGS ===== -->
+    <div class="row g-3 mb-4">
+        <!-- Top 5 más vendidos -->
+        <div class="col-md-6">
+            <div class="card p-3 h-100">
+                <h5>🏆 Top 5 Más Vendidos del Mes</h5>
+                <canvas id="chartTop5" height="180"></canvas>
+                <table class="table table-sm mt-3">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Producto</th>
+                            <th>Cant</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (int i = 0; i < top5Mas.Count; i++)
+                        {
+                            var item = top5Mas[i];
+                            <tr>
+                                <td>
+                                    <span style="font-weight:700;color:@(i == 0 ? "#f59e0b" : i == 1 ? "#9ca3af" : i == 2 ? "#d97706" : "#6b7280");">
+                                        @(i == 0 ? "🥇" : i == 1 ? "🥈" : i == 2 ? "🥉" : $"{i + 1}.")
+                                    </span>
+                                </td>
+                                <td style="font-size:0.85rem;">@item.Nombre</td>
+                                <td><span class="badge bg-success">@item.Cantidad</span></td>
+                                <td style="font-weight:600;color:#E31E24;">₡@item.Total.ToString("N0")</td>
+                            </tr>
+                        }
+                        @if (!top5Mas.Any())
+                        {
+                            <tr><td colspan="4" class="text-center text-muted">Sin ventas este mes</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Top 5 menos vendidos -->
+        <div class="col-md-6">
+            <div class="card p-3 h-100">
+                <h5>📉 Top 5 Menos Vendidos del Mes</h5>
+                <canvas id="chartTop5Menos" height="180"></canvas>
+                <table class="table table-sm mt-3">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Producto</th>
+                            <th>Cant Vendida</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (int i = 0; i < top5Menos.Count; i++)
+                        {
+                            var item = top5Menos[i];
+                            <tr>
+                                <td style="color:#6b7280;">@(i + 1).</td>
+                                <td style="font-size:0.85rem;">@item.Nombre</td>
+                                <td><span class="badge bg-danger">@item.Cantidad</span></td>
+                            </tr>
+                        }
+                        @if (!top5Menos.Any())
+                        {
+                            <tr><td colspan="3" class="text-center text-muted">Sin ventas este mes</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== STOCK BAJO ===== -->
+    @if (productosBajoStockList.Any())
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-12">
+                <div class="card p-3">
+                    <h5>⚠️ Productos con Stock Bajo</h5>
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Producto</th>
+                                <th>Stock Actual</th>
+                                <th>Stock Mínimo</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var p in productosBajoStockList)
+                            {
+                                <tr>
+                                    <td>@p.Nombre</td>
+                                    <td><span class="badge bg-danger">@p.Stock</span></td>
+                                    <td>@p.StockMinimo</td>
+                                    <td>
+                                        @if (p.Stock == 0)
+                                        {
+                                            <span style="color:#E31E24;font-weight:600;">🚨 Sin stock</span>
+                                        }
+                                        else
+                                        {
+                                            <span style="color:#d97706;font-weight:600;">⚠️ Stock crítico</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private bool cargando = true;
+    private decimal ventasHoy = 0;
+    private decimal ventasMes = 0;
+    private decimal ventasMesAnterior = 0;
+    private int productosVendidosHoy = 0;
+    private string productoMasVendidoHoy = "";
+    private int productosBajoStock = 0;
+    private bool cajaAbierta = false;
+    private List<(string Nombre, int Cantidad, decimal Total)> top5Mas = new();
+    private List<(string Nombre, int Cantidad)> top5Menos = new();
+    private Dictionary<string, decimal> ventasPorMetodo = new();
+    private List<(string Dia, decimal Total)> ventas7Dias = new();
+    private List<Producto> productosBajoStockList = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        ventasHoy = await DashboardService.GetVentasTotalesHoyAsync();
+        productosVendidosHoy = await DashboardService.GetProductosVendidosHoyAsync();
+        ventasMes = await DashboardService.GetVentasTotalesMesAsync();
+        ventasMesAnterior = await DashboardService.GetVentasMesAnteriorAsync();
+        productoMasVendidoHoy = await DashboardService.GetProductoMasVendidoHoyAsync();
+        productosBajoStock = await DashboardService.GetProductosBajoStockAsync();
+        cajaAbierta = await DashboardService.CajaAbiertaAsync();
+        top5Mas = await DashboardService.GetTop5MasVendidosMesAsync();
+        top5Menos = await DashboardService.GetTop5MenosVendidosMesAsync();
+        ventasPorMetodo = await DashboardService.GetVentasPorMetodoMesAsync();
+        ventas7Dias = await DashboardService.GetVentasUltimos7DiasAsync();
+        productosBajoStockList = await DashboardService.GetProductosBajoStockListAsync();
+        cargando = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (cargando) return;
+        await Task.Delay(100); // dar tiempo a Chart.js
+        await RenderizarGraficos();
+    }
+
+    private async Task RenderizarGraficos()
+    {
+        // Gráfico ventas 7 días
+        var labels7 = ventas7Dias.Select(v => v.Dia).ToArray();
+        var data7 = ventas7Dias.Select(v => (double)v.Total).ToArray();
+        await JS.InvokeVoidAsync("renderBarChart", "chartVentas", labels7, data7, "Ventas (₡)", "#E31E24");
+
+        // Gráfico métodos de pago
+        if (ventasPorMetodo.Any())
+        {
+            var labelsMetodos = ventasPorMetodo.Keys.ToArray();
+            var dataMetodos = ventasPorMetodo.Values.Select(v => (double)v).ToArray();
+            await JS.InvokeVoidAsync("renderDonutChart", "chartMetodos", labelsMetodos, dataMetodos);
+        }
+
+        // Gráfico top 5 más vendidos
+        if (top5Mas.Any())
+        {
+            var labelsTop = top5Mas.Select(t => t.Nombre.Length > 15 ? t.Nombre[..15] + "..." : t.Nombre).ToArray();
+            var dataTop = top5Mas.Select(t => (double)t.Cantidad).ToArray();
+            await JS.InvokeVoidAsync("renderBarChart", "chartTop5", labelsTop, dataTop, "Unidades", "#10b981");
+        }
+
+        // Gráfico top 5 menos vendidos
+        if (top5Menos.Any())
+        {
+            var labelsMenos = top5Menos.Select(t => t.Nombre.Length > 15 ? t.Nombre[..15] + "..." : t.Nombre).ToArray();
+            var dataMenos = top5Menos.Select(t => (double)t.Cantidad).ToArray();
+            await JS.InvokeVoidAsync("renderBarChart", "chartTop5Menos", labelsMenos, dataMenos, "Unidades", "#f59e0b");
+        }
+    }
+}

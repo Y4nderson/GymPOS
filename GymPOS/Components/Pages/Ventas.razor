@@ -1,10 +1,12 @@
 ﻿@page "/ventas"
 @using GymPOS.Models
 @using GymPOS.Services
+@implements IDisposable
 @inject ProductoService ProductoService
 @inject VentaService VentaService
 @inject CajaService CajaService
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 @rendermode InteractiveServer
 
 @if (!cajaAbierta)
@@ -76,8 +78,8 @@ else if (mostrarConfirmacion)
                     <span>✅ Confirmar Cobro</span>
                 }
             </button>
-            <button class="btn btn-secondary w-100" @onclick="() => mostrarConfirmacion = false" disabled="@procesando">
-                ← Volver al Carrito
+            <button class="btn btn-secondary w-100" @onclick="VolverAlCarrito" disabled="@procesando">
+                ← Volver al Carrito <span class="text-muted small">(Esc)</span>
             </button>
         </div>
     </div>
@@ -85,6 +87,13 @@ else if (mostrarConfirmacion)
 else
 {
     <h3>Punto de Venta</h3>
+
+    <div class="text-muted small mb-3">
+        ⌨️ <strong>F2</strong> Cobrar &nbsp;|&nbsp;
+        <strong>F3</strong> Cancelar venta &nbsp;|&nbsp;
+        <strong>Esc</strong> Volver &nbsp;|&nbsp;
+        <strong>Enter</strong> Buscar/Escanear
+    </div>
 
     <div class="row g-4">
         <!-- IZQUIERDA: Buscador -->
@@ -112,9 +121,7 @@ else
                         @foreach (var p in productosBusqueda)
                         {
                             <div style="display:flex;align-items:center;justify-content:space-between;padding:0.85rem 1rem;border-bottom:1px solid #f3f4f6;cursor:pointer;transition:background 0.15s;"
-                                 @onclick="() => AgregarAlCarrito(p)"
-                                 @onmouseover="(e) => { }"
-                                 class="table-hover">
+                                 @onclick="() => AgregarAlCarrito(p)">
                                 <div>
                                     <div style="font-weight:600;color:#1a1a2e;">@p.Nombre</div>
                                     <div style="font-size:0.8rem;color:#9ca3af;">Stock: @p.Stock unidades</div>
@@ -197,12 +204,12 @@ else
                             </span>
                         </div>
                         <button class="btn btn-success w-100 btn-lg mb-2"
-                                @onclick="() => mostrarConfirmacion = true">
-                            💳 Cobrar ₡@totalCarrito.ToString("N0")
+                                @onclick="IrACobrar">
+                            💳 Cobrar ₡@totalCarrito.ToString("N0") <span class="text-white-50 small">(F2)</span>
                         </button>
                         <button class="btn btn-secondary w-100"
                                 @onclick="LimpiarCarrito">
-                            🗑️ Cancelar Venta
+                            🗑️ Cancelar Venta <span class="small">(F3)</span>
                         </button>
                     </div>
                 }
@@ -231,6 +238,7 @@ else
     private bool cajaAbierta = false;
     private bool procesando = false;
     private string? mensajeError;
+    private DotNetObjectReference<Ventas>? _dotNetRef;
 
     private decimal totalCarrito => carrito.Sum(i => i.Subtotal);
 
@@ -239,6 +247,56 @@ else
         cajaAbierta = await CajaService.CajaAbiertaHoyAsync();
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && cajaAbierta)
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("registerHotkeys", _dotNetRef);
+            await JS.InvokeVoidAsync("focusScanner");
+        }
+    }
+
+    // ===== HOTKEYS =====
+    [JSInvokable]
+    public async Task OnF2()
+    {
+        if (cajaAbierta && carrito.Any() && !mostrarConfirmacion)
+        {
+            mostrarConfirmacion = true;
+            StateHasChanged();
+        }
+        await Task.CompletedTask;
+    }
+
+    [JSInvokable]
+    public async Task OnF3()
+    {
+        if (cajaAbierta && !mostrarConfirmacion)
+        {
+            LimpiarCarrito();
+            StateHasChanged();
+        }
+        await Task.CompletedTask;
+    }
+
+    [JSInvokable]
+    public async Task OnEscape()
+    {
+        if (mostrarConfirmacion)
+        {
+            mostrarConfirmacion = false;
+            StateHasChanged();
+            await JS.InvokeVoidAsync("focusScanner");
+        }
+    }
+
+    public void Dispose()
+    {
+        _dotNetRef?.Dispose();
+    }
+
+    // ===== SCANNER =====
     private async Task OnKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
@@ -265,7 +323,15 @@ else
             .ToList();
 
         if (!productosBusqueda.Any())
-            mensajeError = $"No se encontró ningún producto con '{codigoBusqueda}'.";
+        {
+            mensajeError = $"⚠️ Código '{codigoBusqueda}' no encontrado.";
+            await Task.Delay(2000);
+            codigoBusqueda = string.Empty;
+            mensajeError = null;
+            productosBusqueda = null;
+            StateHasChanged();
+            await JS.InvokeVoidAsync("focusScanner");
+        }
     }
 
     private void AgregarAlCarrito(Producto p)
@@ -323,6 +389,18 @@ else
         mensajeError = null;
     }
 
+    private void IrACobrar()
+    {
+        if (carrito.Any())
+            mostrarConfirmacion = true;
+    }
+
+    private async Task VolverAlCarrito()
+    {
+        mostrarConfirmacion = false;
+        await JS.InvokeVoidAsync("focusScanner");
+    }
+
     private async Task ProcesarVenta()
     {
         if (procesando || !carrito.Any()) return;
@@ -346,6 +424,7 @@ else
             montoRecibido = 0;
             ventaExitosa = true;
 
+            await JS.InvokeVoidAsync("focusScanner");
             await Task.Delay(3000);
             ventaExitosa = false;
         }

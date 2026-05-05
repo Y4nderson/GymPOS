@@ -1,5 +1,5 @@
-﻿@page "/account/logout"
-@model GymPOS.Pages.Account.LogoutModel
+﻿@page "/account/login"
+@model GymPOS.Pages.Account.LoginModel
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -184,10 +184,10 @@
                 <form method="post">
                     @Html.AntiForgeryToken()
                     <div class="mb-3">
-                        <label class="form-label">Correo Electrónico</label>
-                        <input type="email" name="Email" class="form-control"
-                               placeholder="correo@ejemplo.com"
-                               value="@Model.Email" required autofocus />
+                        <label class="form-label">Usuario</label>
+                        <input type="text" name="Username" class="form-control"
+                               placeholder="Ej: yarias"
+                               value="@Model.Username" required autofocus />
                     </div>
                     <div class="mb-4">
                         <label class="form-label">Contraseña</label>

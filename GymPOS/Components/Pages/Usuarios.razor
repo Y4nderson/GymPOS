@@ -19,7 +19,7 @@ else
         <thead>
             <tr>
                 <th>Nombre</th>
-                <th>Email</th>
+                <th>Usuario</th>
                 <th>Rol</th>
                 <th>Estado</th>
                 <th>Acciones</th>
@@ -30,7 +30,7 @@ else
             {
                 <tr>
                     <td>@u.Nombre</td>
-                    <td>@u.Email</td>
+                    <td>@u.Username</td>
                     <td>
                         <span class="badge @(u.Rol == "Admin" ? "bg-danger" : "bg-success")">
                             @u.Rol
@@ -64,8 +64,8 @@ else
             <input class="form-control" @bind="usuarioActual.Nombre" />
         </div>
         <div class="mb-2">
-            <label>Email</label>
-            <input type="email" class="form-control" @bind="usuarioActual.Email" />
+            <label>Usuario</label>
+            <input class="form-control" @bind="usuarioActual.Username" placeholder="Ej: yarias" />
         </div>
         <div class="mb-2">
             <label>@(usuarioActual.Id == 0 ? "Contraseña" : "Nueva Contraseña (dejar vacío para no cambiar)")</label>
@@ -129,7 +129,7 @@ else
         {
             Id = u.Id,
             Nombre = u.Nombre,
-            Email = u.Email,
+            Username = u.Username,
             Rol = u.Rol,
             Activo = u.Activo,
             PasswordHash = u.PasswordHash
@@ -141,9 +141,9 @@ else
 
     private async Task Guardar()
     {
-        if (string.IsNullOrWhiteSpace(usuarioActual.Nombre) || string.IsNullOrWhiteSpace(usuarioActual.Email))
+        if (string.IsNullOrWhiteSpace(usuarioActual.Nombre) || string.IsNullOrWhiteSpace(usuarioActual.Username))
         {
-            errorMensaje = "Nombre y email son obligatorios.";
+            errorMensaje = "Nombre y usuario son obligatorios.";
             return;
         }
 

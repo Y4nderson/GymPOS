@@ -30,8 +30,19 @@ namespace GymPOS.Services
 
         public async Task UpdateAsync(Producto producto)
         {
-            _context.Productos.Update(producto);
-            await _context.SaveChangesAsync();
+            var existing = await _context.Productos.FindAsync(producto.Id);
+            if (existing != null)
+            {
+                existing.Tipo = producto.Tipo;
+                existing.Marca = producto.Marca;
+                existing.Descripcion = producto.Descripcion;
+                existing.Capacidad = producto.Capacidad;
+                existing.CodigoBarra = producto.CodigoBarra;
+                existing.Precio = producto.Precio;
+                existing.StockMinimo = producto.StockMinimo;
+                existing.Activo = producto.Activo;
+                await _context.SaveChangesAsync();
+            }
         }
 
         public async Task DeleteAsync(int id)

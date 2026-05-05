@@ -15,11 +15,12 @@ main {
 
 .top-row {
     background-color: #ffffff;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 2px solid #fee2e2;
     justify-content: flex-end;
     height: 3.5rem;
     display: flex;
     align-items: center;
+    box-shadow: 0 2px 8px rgba(227,30,36,0.06);
 }
 
     .top-row ::deep a, .top-row ::deep .btn-link {
@@ -91,3 +92,23 @@ main {
         top: 0.5rem;
         color: white;
     }
+
+
+/* ===== FORZAR NAVBAR ===== */
+.sidebar {
+    background: #1a1a1a !important;
+    background-image: none !important;
+}
+
+.navbar-brand {
+    background: linear-gradient(135deg, #1a1a1a 60%, #2a0a0a) !important;
+}
+
+.nav-section-title {
+    color: rgba(255,255,255,0.25) !important;
+    font-size: 0.65rem !important;
+    letter-spacing: 0.12em !important;
+    text-transform: uppercase !important;
+    padding: 0.5rem 0.75rem !important;
+    font-weight: 600 !important;
+}

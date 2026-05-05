@@ -17,7 +17,7 @@ namespace GymPOS.Pages.Account
         }
 
         [BindProperty]
-        public string Email { get; set; } = string.Empty;
+        public string Username { get; set; } = string.Empty;
 
         [BindProperty]
         public string Password { get; set; } = string.Empty;
@@ -31,21 +31,21 @@ namespace GymPOS.Pages.Account
 
         public async Task<IActionResult> OnPostAsync()
         {
-            var usuario = await _authService.LoginAsync(Email, Password);
+            var usuario = await _authService.LoginAsync(Username, Password);
 
             if (usuario == null)
             {
-                ErrorMessage = "Correo o contraseña incorrectos.";
+                ErrorMessage = "Usuario o contraseña incorrectos.";
                 return Page();
             }
 
             var claims = new List<Claim>
-            {
-                new Claim(ClaimTypes.NameIdentifier, usuario.Id.ToString()),
-                new Claim(ClaimTypes.Name, usuario.Nombre),
-                new Claim(ClaimTypes.Email, usuario.Email),
-                new Claim(ClaimTypes.Role, usuario.Rol)
-            };
+    {
+        new Claim(ClaimTypes.NameIdentifier, usuario.Id.ToString()),
+        new Claim(ClaimTypes.Name, usuario.Nombre),
+        new Claim("Username", usuario.Username),
+        new Claim(ClaimTypes.Role, usuario.Rol)
+    };
 
             var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
             var principal = new ClaimsPrincipal(identity);

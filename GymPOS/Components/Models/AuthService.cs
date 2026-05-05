@@ -23,11 +23,11 @@ namespace GymPOS.Services
             return Convert.ToBase64String(hash);
         }
 
-        public async Task<Usuario?> LoginAsync(string email, string password)
+        public async Task<Usuario?> LoginAsync(string username, string password)
         {
             var hash = HashPassword(password);
             return await _context.Usuarios
-                .FirstOrDefaultAsync(u => u.Email == email
+                .FirstOrDefaultAsync(u => u.Username == username
                                        && u.PasswordHash == hash
                                        && u.Activo);
         }
@@ -46,7 +46,6 @@ namespace GymPOS.Services
         {
             if (!string.IsNullOrEmpty(nuevaPassword))
                 usuario.PasswordHash = HashPassword(nuevaPassword);
-
             _context.Usuarios.Update(usuario);
             await _context.SaveChangesAsync();
         }
@@ -68,7 +67,7 @@ namespace GymPOS.Services
                 _context.Usuarios.Add(new Usuario
                 {
                     Nombre = "Administrador",
-                    Email = "admin@inlinegym.com",
+                    Username = "admin",
                     PasswordHash = HashPassword("Admin123!"),
                     Rol = "Admin",
                     Activo = true
