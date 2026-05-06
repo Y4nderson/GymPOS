@@ -9,9 +9,8 @@
 
 <!-- ===== BARRA DE HERRAMIENTAS ===== -->
 <div style="display:flex;gap:12px;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap;">
-    <div style="flex:1;min-width:200px;position:relative;">
-        <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#9ca3af;">🔍</span>
-        <input class="form-control" style="padding-left:2.2rem;"
+    <div style="flex:1;min-width:200px;">
+        <input class="form-control ps-3"
                placeholder="Buscar por nombre, marca, tipo..."
                @bind="busqueda" @bind:event="oninput" />
     </div>
