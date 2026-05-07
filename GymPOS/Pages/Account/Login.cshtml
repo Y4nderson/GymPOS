@@ -17,23 +17,38 @@
 
         body {
             font-family: 'DM Sans', sans-serif;
-            background: #f0f2f5;
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
+            /* ===== FONDO: cambia esta URL por tu imagen ===== */
+            background-image: url('/images/fondo-gym.jpg');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
         }
+
+            body::before {
+                content: '';
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.55);
+                backdrop-filter: blur(2px);
+                z-index: 0;
+            }
 
         .login-wrapper {
             width: 100%;
             max-width: 420px;
             padding: 1rem;
+            position: relative;
+            z-index: 1;
         }
 
         .login-card {
             background: white;
             border-radius: 20px;
-            box-shadow: 0 8px 40px rgba(0,0,0,0.12);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
             overflow: hidden;
         }
 
@@ -55,17 +70,22 @@
             }
 
         .logo-icon {
-            width: 64px;
-            height: 64px;
-            background: linear-gradient(135deg, #b01519, #E31E24);
+            width: 80px;
+            height: 80px;
             border-radius: 16px;
+            margin: 0 auto 1rem;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(227,30,36,0.4);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.8rem;
-            margin: 0 auto 1rem;
-            box-shadow: 0 4px 20px rgba(227,30,36,0.4);
         }
+
+            .logo-icon img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+            }
 
         .brand-name {
             font-family: 'Outfit', sans-serif;
@@ -73,14 +93,6 @@
             font-weight: 700;
             color: white;
             letter-spacing: 0.02em;
-        }
-
-        .brand-sub {
-            font-size: 0.75rem;
-            color: #E31E24;
-            letter-spacing: 0.15em;
-            text-transform: uppercase;
-            font-weight: 500;
         }
 
         .login-body {
@@ -117,6 +129,7 @@
             font-family: 'DM Sans', sans-serif;
             font-size: 0.95rem;
             transition: border-color 0.2s, box-shadow 0.2s;
+            width: 100%;
         }
 
             .form-control:focus {
@@ -168,9 +181,12 @@
     <div class="login-wrapper">
         <div class="login-card">
             <div class="login-header">
-                <div class="logo-icon">💪</div>
+                <div class="logo-icon">
+                    <!-- ===== LOGO: cambia esta URL por tu imagen ===== -->
+                    <img src="/logo.jpg" alt="Inline Gym"
+                         style="width:64px;height:64px;border-radius:16px;object-fit:cover;" />
+                </div>
                 <div class="brand-name">In Line</div>
-                <div class="brand-sub">Sistema POS</div>
             </div>
             <div class="login-body">
                 <h5>Iniciar Sesión</h5>
