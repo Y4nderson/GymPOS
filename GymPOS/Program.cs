@@ -17,6 +17,11 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("DefaultConnection")
     ));
+builder.Services.AddDbContextFactory<AppDbContext>(options =>
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection")
+    ), ServiceLifetime.Scoped);
+
 
 // Autenticación
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -41,7 +46,7 @@ builder.Services.AddScoped<ConteoService>();
 builder.Services.AddScoped<ReporteService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<DashboardService>();
-
+builder.Services.AddScoped<CorreoService>();
 var app = builder.Build();
 
 if (!app.Environment.IsDevelopment())

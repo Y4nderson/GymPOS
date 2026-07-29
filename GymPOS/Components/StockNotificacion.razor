@@ -1,0 +1,101 @@
+﻿@using GymPOS.Services
+@using GymPOS.Models
+@inject DashboardService DashboardService
+@rendermode InteractiveServer
+
+@if (productosStockBajo.Any())
+{
+    <!-- Botón mini siempre visible -->
+    <div style="position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;">
+
+        @if (!expandido)
+        {
+            <button @onclick="() => expandido = true"
+                    style="background:linear-gradient(135deg,#b01519,#E31E24);border:none;color:white;width:52px;height:52px;border-radius:50%;cursor:pointer;box-shadow:0 4px 15px rgba(227,30,36,0.4);font-size:1.3rem;display:flex;align-items:center;justify-content:center;position:relative;">
+                ⚠️
+                <span style="position:absolute;top:-4px;right:-4px;background:#1a1a1a;color:white;border-radius:50%;width:20px;height:20px;font-size:0.65rem;font-weight:700;display:flex;align-items:center;justify-content:center;">
+                    @productosStockBajo.Count
+                </span>
+            </button>
+        }
+        else
+        {
+            <div style="background:white;border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,0.15);border:1px solid #fecaca;overflow:hidden;width:320px;animation:slideIn 0.2s ease;">
+
+                <!-- Header -->
+                <div style="background:linear-gradient(135deg,#b01519,#E31E24);padding:0.85rem 1rem;display:flex;justify-content:space-between;align-items:center;">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span style="font-size:1.1rem;">⚠️</span>
+                        <div>
+                            <div style="color:white;font-weight:700;font-size:0.9rem;">Stock Bajo</div>
+                            <div style="color:rgba(255,255,255,0.75);font-size:0.72rem;">
+                                @productosStockBajo.Count producto(s) requieren atención
+                            </div>
+                        </div>
+                    </div>
+                    <button @onclick="() => expandido = false"
+                            style="background:rgba(255,255,255,0.2);border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:0.85rem;">
+                        ✕
+                    </button>
+                </div>
+
+                <!-- Lista -->
+                <div style="max-height:220px;overflow-y:auto;">
+                    @foreach (var p in productosStockBajo)
+                    {
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding:0.6rem 1rem;border-bottom:1px solid #fef2f2;">
+                            <div>
+                                <div style="font-weight:600;font-size:0.85rem;color:#1a1a2e;">@p.Nombre</div>
+                                <div style="font-size:0.72rem;color:#9ca3af;">Mínimo: @p.StockMinimo unid.</div>
+                            </div>
+                            <span style="font-weight:700;font-size:0.85rem;
+                                                     color:@(p.Stock <= 0 ? "#E31E24" : "#d97706");
+                                                     background:@(p.Stock <= 0 ? "#fff5f5" : "#fffbeb");
+                                                     padding:2px 8px;border-radius:6px;
+                                                     border:1px solid @(p.Stock <= 0 ? "#fecaca" : "#fde68a");">
+                                @(p.Stock <= 0 ? "Sin stock" : $"{p.Stock} unid.")
+                            </span>
+                        </div>
+                    }
+                </div>
+
+                <!-- Footer -->
+                <div style="padding:0.6rem 1rem;background:#fff8f8;display:flex;justify-content:space-between;align-items:center;">
+                    <span style="font-size:0.72rem;color:#9ca3af;">Actualizado al cargar</span>
+                    <a href="/inventario" style="font-size:0.8rem;color:#E31E24;font-weight:600;text-decoration:none;">
+                        Ver Inventario →
+                    </a>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<style>
+    @@keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+</style>
+
+@code {
+    private List<Producto> productosStockBajo = new();
+    private bool expandido = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            productosStockBajo = await DashboardService.GetProductosStockBajoOSinStockAsync();
+            expandido = productosStockBajo.Any(); // abre automático al cargar
+        }
+        catch { }
+    }
+}

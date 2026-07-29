@@ -4,114 +4,201 @@
 @inject IJSRuntime JS
 @rendermode InteractiveServer
 
-<h3>📊 Reportes Históricos</h3>
+<h3>📊 Reportes</h3>
 
-<div class="row">
-    <div class="col-md-5">
-        <div class="card p-3 mb-3">
-            <h5>Reporte del Día Actual</h5>
-            <p class="text-muted small">Descarga el reporte del día de hoy.</p>
-            <button class="btn btn-success" @onclick="DescargarHoy">
-                📥 Descargar Reporte de Hoy
+<div class="row g-3 mb-4">
+
+    <!-- Reporte de hoy -->
+    <div class="col-md-4">
+        <div class="card p-4 h-100">
+            <div style="font-size:2rem;margin-bottom:0.5rem;">📅</div>
+            <h5>Reporte de Hoy</h5>
+            <p class="text-muted small">Descarga el reporte del día actual.</p>
+            <button class="btn btn-success mt-auto" @onclick="DescargarHoy" disabled="@cargando">
+                @if (cargando && tipoDescarga == "hoy")
+                {
+                    <span class="spinner-border spinner-border-sm me-1"></span>
+                }
+                📥 Descargar
             </button>
         </div>
+    </div>
 
-        <div class="card p-3">
+    <!-- Reporte por fecha -->
+    <div class="col-md-4">
+        <div class="card p-4 h-100">
+            <div style="font-size:2rem;margin-bottom:0.5rem;">🗓️</div>
             <h5>Reporte por Fecha</h5>
-            <p class="text-muted small">Selecciona cualquier fecha para descargar su reporte.</p>
-            <div class="mb-2">
-                <label>Fecha</label>
+            <div class="mb-3">
+                <label class="form-label small">Fecha</label>
                 <input type="date" class="form-control"
                        @bind="fechaSeleccionada"
                        max="@DateTime.Today.ToString("yyyy-MM-dd")" />
             </div>
-            <button class="btn btn-primary" @onclick="DescargarPorFecha">
-                📥 Descargar Reporte
+            <button class="btn btn-primary mt-auto" @onclick="DescargarPorFecha" disabled="@cargando">
+                @if (cargando && tipoDescarga == "fecha")
+                {
+                    <span class="spinner-border spinner-border-sm me-1"></span>
+                }
+                📥 Descargar
             </button>
         </div>
     </div>
 
-    <div class="col-md-7">
-        <div class="card p-3">
-            <h5>Días con registros</h5>
-            @if (fechasConRegistros == null)
+    <!-- Reporte por rango -->
+    <div class="col-md-4">
+        <div class="card p-4 h-100" style="border: 2px solid #E31E24;">
+            <div style="font-size:2rem;margin-bottom:0.5rem;">📈</div>
+            <h5>Reporte por Rango <span style="font-size:0.7rem;background:#E31E24;color:white;border-radius:20px;padding:2px 8px;vertical-align:middle;">NUEVO</span></h5>
+            <div class="mb-2">
+                <label class="form-label small">Desde</label>
+                <input type="date" class="form-control"
+                       @bind="rangoDesde"
+                       max="@DateTime.Today.ToString("yyyy-MM-dd")" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label small">Hasta</label>
+                <input type="date" class="form-control"
+                       @bind="rangoHasta"
+                       max="@DateTime.Today.ToString("yyyy-MM-dd")" />
+            </div>
+            @if (errorRango != null)
             {
-                <p>Cargando...</p>
+                <div class="text-danger small mb-2">⚠️ @errorRango</div>
             }
-            else if (!fechasConRegistros.Any())
-            {
-                <p class="text-muted">No hay registros históricos aún.</p>
-            }
-            else
-            {
-                <table class="table table-sm table-hover">
-                    <thead>
-                        <tr>
-                            <th>Fecha</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var fecha in fechasConRegistros)
-                        {
-                            <tr>
-                                <td>@fecha.ToString("dddd dd 'de' MMMM 'de' yyyy")</td>
-                                <td>
-                                    <button class="btn btn-sm btn-outline-primary"
-                                            @onclick="() => DescargarFecha(fecha)">
-                                        📥 Descargar
-                                    </button>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            }
+            <button class="btn btn-danger mt-auto" @onclick="DescargarRango" disabled="@cargando">
+                @if (cargando && tipoDescarga == "rango")
+                {
+                    <span class="spinner-border spinner-border-sm me-1"></span>
+                }
+                📥 Descargar Rango
+            </button>
         </div>
     </div>
 </div>
 
+<!-- Historial de fechas -->
+<div class="card">
+    <div class="card-header">📋 Días con Registros</div>
+    @if (fechasConRegistros == null)
+    {
+        <div class="p-3 text-muted">Cargando...</div>
+    }
+    else if (!fechasConRegistros.Any())
+    {
+        <div class="p-4 text-center text-muted">No hay registros históricos aún.</div>
+    }
+    else
+    {
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var fecha in fechasConRegistros)
+                {
+                    <tr>
+                        <td>@fecha.ToString("dddd dd 'de' MMMM 'de' yyyy")</td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-primary"
+                                    @onclick="() => DescargarFecha(fecha)"
+                                    disabled="@cargando">
+                                📥 Descargar
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
 @if (mensaje != null)
 {
-    <div class="alert alert-info mt-3 text-center">@mensaje</div>
+    <div style="position:fixed;bottom:2rem;right:2rem;z-index:9999;">
+        <div class="alert @(mensaje.StartsWith("✅") ? "alert-success" : "alert-info")"
+             style="box-shadow:0 4px 20px rgba(0,0,0,0.15);border-radius:12px;padding:1rem 1.5rem;">
+            @mensaje
+        </div>
+    </div>
 }
 
 @code {
     private List<DateTime>? fechasConRegistros;
     private DateTime fechaSeleccionada = DateTime.Today;
+    private DateTime rangoDesde = DateTime.Today.AddDays(-7);
+    private DateTime rangoHasta = DateTime.Today;
     private string? mensaje;
+    private string? errorRango;
+    private bool cargando = false;
+    private string tipoDescarga = "";
 
     protected override async Task OnInitializedAsync()
     {
         fechasConRegistros = await ReporteService.GetFechasConRegistrosAsync();
     }
 
-    private async Task DescargarHoy()
+    private async Task DescargarHoy() => await Descargar(DateTime.Today, "hoy");
+    private async Task DescargarPorFecha() => await Descargar(fechaSeleccionada, "fecha");
+    private async Task DescargarFecha(DateTime fecha) => await Descargar(fecha, "fecha");
+
+    private async Task DescargarRango()
     {
-        await Descargar(DateTime.Today);
+        errorRango = null;
+        if (rangoDesde > rangoHasta)
+        {
+            errorRango = "La fecha inicial no puede ser mayor a la final.";
+            return;
+        }
+        if ((rangoHasta - rangoDesde).Days > 90)
+        {
+            errorRango = "El rango máximo es 90 días.";
+            return;
+        }
+
+        cargando = true;
+        tipoDescarga = "rango";
+        mensaje = "⏳ Generando reporte del rango...";
+        StateHasChanged();
+        try
+        {
+            var bytes = await ReporteService.GenerarReportePorRangoAsync(rangoDesde, rangoHasta);
+            var base64 = Convert.ToBase64String(bytes);
+            var fileName = $"Reporte_InlineGym_{rangoDesde:yyyyMMdd}_al_{rangoHasta:yyyyMMdd}.xlsx";
+            await JS.InvokeVoidAsync("downloadFile", base64, fileName);
+            mensaje = $"✅ Reporte del {rangoDesde:dd/MM} al {rangoHasta:dd/MM} descargado.";
+        }
+        finally
+        {
+            cargando = false;
+            tipoDescarga = "";
+        }
+        await Task.Delay(3000);
+        mensaje = null;
     }
 
-    private async Task DescargarPorFecha()
+    private async Task Descargar(DateTime fecha, string tipo)
     {
-        await Descargar(fechaSeleccionada);
-    }
-
-    private async Task DescargarFecha(DateTime fecha)
-    {
-        await Descargar(fecha);
-    }
-
-    private async Task Descargar(DateTime fecha)
-    {
+        cargando = true;
+        tipoDescarga = tipo;
         mensaje = "⏳ Generando reporte...";
         StateHasChanged();
-
-        var bytes = await ReporteService.GenerarReportePorFechaAsync(fecha);
-        var base64 = Convert.ToBase64String(bytes);
-        var fileName = $"Reporte_InlineGym_{fecha:yyyyMMdd}.xlsx";
-        await JS.InvokeVoidAsync("downloadFile", base64, fileName);
-
-        mensaje = $"✅ Reporte del {fecha:dd/MM/yyyy} descargado.";
+        try
+        {
+            var bytes = await ReporteService.GenerarReportePorFechaAsync(fecha);
+            var base64 = Convert.ToBase64String(bytes);
+            var fileName = $"Reporte_InlineGym_{fecha:yyyyMMdd}.xlsx";
+            await JS.InvokeVoidAsync("downloadFile", base64, fileName);
+            mensaje = $"✅ Reporte del {fecha:dd/MM/yyyy} descargado.";
+        }
+        finally
+        {
+            cargando = false;
+            tipoDescarga = "";
+        }
         await Task.Delay(3000);
         mensaje = null;
     }

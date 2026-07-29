@@ -8,11 +8,13 @@ namespace GymPOS.Services
     {
         private readonly AppDbContext _context;
         private readonly CajaService _cajaService;
+        private readonly CorreoService _correoService;
 
-        public VentaService(AppDbContext context, CajaService cajaService)
+        public VentaService(AppDbContext context, CajaService cajaService, CorreoService correoService)
         {
             _context = context;
             _cajaService = cajaService;
+            _correoService = correoService;
         }
 
         public async Task<List<Venta>> GetAllAsync()
@@ -31,11 +33,7 @@ namespace GymPOS.Services
             {
                 var producto = await _context.Productos.FindAsync(detalle.ProductoId);
                 if (producto != null)
-                {
                     producto.Stock -= detalle.Cantidad;
-                    // Nunca permitir stock negativo
-                    if (producto.Stock < 0) producto.Stock = 0;
-                }
             }
 
             _context.MovimientosCaja.Add(new MovimientoCaja
@@ -49,6 +47,11 @@ namespace GymPOS.Services
 
             _context.Ventas.Add(venta);
             await _context.SaveChangesAsync();
+
+            // Verificar stock bajo y enviar correo si aplica
+            var idsVendidos = venta.Detalles.Select(d => d.ProductoId).ToList();
+            await _correoService.VerificarYEnviarStockBajoAsync(idsVendidos);
+
             return venta;
         }
     }

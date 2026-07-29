@@ -5,78 +5,181 @@
 @inject ProductoService ProductoService
 @inject CajaService CajaService
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 @rendermode InteractiveServer
 
 @if (!cajaAbierta)
 {
-    <div class="alert alert-warning mt-5 text-center">
-        <h4>⚠️ La caja no está abierta</h4>
-        <button class="btn btn-primary" @onclick='() => Navigation.NavigateTo("/caja")'>Ir a Abrir Caja</button>
+    <div style="max-width:450px;margin:5rem auto;">
+        <div class="card p-4 text-center">
+            <div style="font-size:3rem;margin-bottom:1rem;">🔒</div>
+            <h4>Caja no abierta</h4>
+            <p class="text-muted">Debe abrir la caja antes de registrar entradas.</p>
+            <button class="btn btn-primary mt-2" @onclick='() => Navigation.NavigateTo("/caja")'>
+                Ir a Abrir Caja
+            </button>
+        </div>
     </div>
 }
 else
 {
     <h3>📦 Entrada de Producto</h3>
 
-    <div class="card p-3 mb-4" style="max-width:500px">
-        <div class="mb-2">
-            <label>Producto</label>
-            <select class="form-control" @bind="entrada.ProductoId">
-                <option value="0">-- Seleccione --</option>
-                @foreach (var p in productos)
+    <div class="row g-4">
+        <!-- FORMULARIO -->
+        <div class="col-md-5">
+            <div class="card p-4">
+                <h5 class="mb-3">Registrar Entrada</h5>
+
+                <!-- Scanner código de barras -->
+                <div class="mb-3">
+                    <label>Escanear Código de Barra</label>
+                    <input id="inputScannerEntrada"
+                           class="form-control"
+                           style="font-size:1rem;"
+                           placeholder="🔍 Escanea o escribe el código..."
+                           @bind="codigoEscaneado"
+                           @bind:event="oninput"
+                           @onkeydown="OnKeyDownScanner" />
+                    @if (productoEncontrado != null)
+                    {
+                        <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;padding:0.6rem 0.9rem;margin-top:6px;display:flex;justify-content:space-between;align-items:center;">
+                            <div>
+                                <div style="font-weight:600;font-size:0.9rem;color:#065f46;">✅ @productoEncontrado.Nombre</div>
+                                <div style="font-size:0.75rem;color:#6b7280;">Stock actual: @productoEncontrado.Stock unid.</div>
+                            </div>
+                            <button class="btn btn-sm btn-secondary" @onclick="LimpiarScanner">✕</button>
+                        </div>
+                    }
+                    @if (errorScanner != null)
+                    {
+                        <div style="background:#fff5f5;border:1px solid #fecaca;border-radius:8px;padding:0.5rem 0.9rem;margin-top:6px;font-size:0.85rem;color:#991b1b;">
+                            ⚠️ @errorScanner
+                        </div>
+                    }
+                </div>
+
+                <!-- Separador -->
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;">
+                    <div style="flex:1;height:1px;background:#fbd5d5;"></div>
+                    <span style="font-size:0.75rem;color:#9ca3af;">o selecciona manualmente</span>
+                    <div style="flex:1;height:1px;background:#fbd5d5;"></div>
+                </div>
+
+                <!-- Selector manual -->
+                <div class="mb-3">
+                    <label>Producto</label>
+                    <select class="form-control" @bind="entrada.ProductoId" @bind:after="OnProductoSeleccionado">
+                        <option value="0">-- Seleccione --</option>
+                        @foreach (var p in productos)
+                        {
+                            <option value="@p.Id">@p.Nombre</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label>Cantidad que ingresa</label>
+                    <input type="number" class="form-control" @bind="entrada.Cantidad" min="1" />
+                </div>
+
+                <div class="mb-3">
+                    <label>Proveedor</label>
+                    <input class="form-control" @bind="entrada.Proveedor" placeholder="Nombre del proveedor" />
+                </div>
+
+                <div class="mb-3">
+                    <label>Costo Factura (₡) <span style="color:#9ca3af;font-size:0.75rem;">opcional</span></label>
+                    <input type="number" class="form-control" @bind="entrada.CostoFactura" />
+                </div>
+
+                <div class="mb-3">
+                    <label>Observación <span style="color:#9ca3af;font-size:0.75rem;">opcional</span></label>
+                    <input class="form-control" @bind="entrada.Observacion" placeholder="Ej: Pedido semanal" />
+                </div>
+
+                <button class="btn btn-success w-100" @onclick="Registrar" disabled="@guardando">
+                    @if (guardando)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                        <span>Registrando...</span>
+                    }
+                    else
+                    {
+                        <span>✅ Registrar Entrada</span>
+                    }
+                </button>
+            </div>
+        </div>
+
+        <!-- HISTORIAL -->
+        <div class="col-md-7">
+            <div class="card" style="overflow:hidden;">
+                <div class="card-header">
+                    📋 Entradas del Turno
+                </div>
+                @if (!entradasHoy.Any())
                 {
-                    <option value="@p.Id">@p.Nombre</option>
+                    <div class="text-center p-4" style="color:#d1d5db;">
+                        <div style="font-size:2.5rem;">📦</div>
+                        <div style="font-size:0.9rem;">No hay entradas registradas en este turno</div>
+                    </div>
                 }
-            </select>
+                else
+                {
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Hora</th>
+                                <th>Producto</th>
+                                <th>Cantidad</th>
+                                <th>Proveedor</th>
+                                <th>Factura</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var e in entradasHoy)
+                            {
+                                <tr>
+                                    <td style="font-size:0.85rem;color:#6b7280;">@e.Fecha.ToString("hh:mm tt")</td>
+                                    <td>
+                                        <div style="font-weight:600;font-size:0.9rem;">@e.Producto?.Nombre</div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-success">+@e.Cantidad</span>
+                                    </td>
+                                    <td style="font-size:0.85rem;">@(e.Proveedor ?? "-")</td>
+                                    <td style="font-weight:600;color:#E31E24;">
+                                        @(e.CostoFactura > 0 ? $"₡{e.CostoFactura:N0}" : "-")
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+
+                    <!-- Total factura -->
+                    @if (entradasHoy.Any(e => e.CostoFactura > 0))
+                    {
+                        <div style="padding:0.75rem 1rem;border-top:1px solid #fbd5d5;display:flex;justify-content:flex-end;align-items:center;gap:12px;">
+                            <span style="font-size:0.85rem;color:#6b7280;">Total facturas del turno:</span>
+                            <span style="font-weight:700;color:#E31E24;font-size:1.1rem;">
+                                ₡@entradasHoy.Sum(e => e.CostoFactura).ToString("N0")
+                            </span>
+                        </div>
+                    }
+                }
+            </div>
         </div>
-        <div class="mb-2">
-            <label>Cantidad que ingresa</label>
-            <input type="number" class="form-control" @bind="entrada.Cantidad" />
-        </div>
-        <div class="mb-2">
-            <label>Proveedor</label>
-            <input class="form-control" @bind="entrada.Proveedor" placeholder="Nombre del proveedor" />
-        </div>
-        <div class="mb-2">
-            <label>Costo Factura (₡)</label>
-            <input type="number" class="form-control" @bind="entrada.CostoFactura" />
-        </div>
-        <div class="mb-2">
-            <label>Observación</label>
-            <input class="form-control" @bind="entrada.Observacion" />
-        </div>
-        <button class="btn btn-success w-100" @onclick="Registrar">✅ Registrar Entrada</button>
     </div>
+}
 
-    @if (mensaje != null)
-    {
-        <div class="alert alert-success">✅ @mensaje</div>
-    }
-
-    <h5>Entradas del turno:</h5>
-    <table class="table table-sm table-striped">
-        <thead>
-            <tr>
-                <th>Hora</th>
-                <th>Producto</th>
-                <th>Cantidad</th>
-                <th>Proveedor</th>
-                <th>Factura</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var e in entradasHoy)
-            {
-                <tr>
-                    <td>@e.Fecha.ToString("hh:mm tt")</td>
-                    <td>@e.Producto?.Nombre</td>
-                    <td>@e.Cantidad</td>
-                    <td>@e.Proveedor</td>
-                    <td>₡@e.CostoFactura.ToString("N0")</td>
-                </tr>
-            }
-        </tbody>
-    </table>
+@if (mensaje != null)
+{
+    <div style="position:fixed;bottom:2rem;right:2rem;z-index:9999;">
+        <div class="alert alert-success" style="box-shadow:0 4px 20px rgba(0,0,0,0.15);border-radius:12px;padding:1rem 1.5rem;">
+            ✅ @mensaje
+        </div>
+    </div>
 }
 
 @code {
@@ -84,7 +187,11 @@ else
     private List<EntradaProducto> entradasHoy = new();
     private EntradaProducto entrada = new();
     private bool cajaAbierta = false;
+    private bool guardando = false;
     private string? mensaje;
+    private string codigoEscaneado = string.Empty;
+    private Producto? productoEncontrado = null;
+    private string? errorScanner = null;
 
     protected override async Task OnInitializedAsync()
     {
@@ -96,15 +203,73 @@ else
         }
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && cajaAbierta)
+            await JS.InvokeVoidAsync("focusEntradaScanner");
+    }
+
+    private async Task OnKeyDownScanner(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await BuscarPorCodigo();
+    }
+
+    private async Task BuscarPorCodigo()
+    {
+        if (string.IsNullOrWhiteSpace(codigoEscaneado)) return;
+        errorScanner = null;
+
+        var producto = await ProductoService.GetByCodigoBarraAsync(codigoEscaneado);
+        if (producto != null)
+        {
+            productoEncontrado = producto;
+            entrada.ProductoId = producto.Id;
+            codigoEscaneado = string.Empty;
+        }
+        else
+        {
+            errorScanner = $"Código '{codigoEscaneado}' no encontrado.";
+            await Task.Delay(2000);
+            errorScanner = null;
+            codigoEscaneado = string.Empty;
+            StateHasChanged();
+        }
+    }
+
+    private void OnProductoSeleccionado()
+    {
+        var p = productos.FirstOrDefault(x => x.Id == entrada.ProductoId);
+        if (p != null)
+        {
+            productoEncontrado = p;
+            codigoEscaneado = string.Empty;
+        }
+    }
+
+    private void LimpiarScanner()
+    {
+        productoEncontrado = null;
+        entrada.ProductoId = 0;
+        codigoEscaneado = string.Empty;
+        errorScanner = null;
+    }
+
     private async Task Registrar()
     {
-        if (entrada.ProductoId == 0 || entrada.Cantidad <= 0) return;
-
-        await EntradaService.RegistrarEntradaAsync(entrada);
-        entrada = new EntradaProducto();
-        entradasHoy = await EntradaService.GetEntradasHoyAsync();
-        mensaje = "Entrada registrada y stock actualizado.";
-        await Task.Delay(3000);
-        mensaje = null;
+        if (guardando || entrada.ProductoId == 0 || entrada.Cantidad <= 0) return;
+        guardando = true;
+        try
+        {
+            await EntradaService.RegistrarEntradaAsync(entrada);
+            entrada = new EntradaProducto();
+            productoEncontrado = null;
+            codigoEscaneado = string.Empty;
+            entradasHoy = await EntradaService.GetEntradasHoyAsync();
+            mensaje = "Entrada registrada y stock actualizado.";
+            await Task.Delay(3000);
+            mensaje = null;
+        }
+        finally { guardando = false; }
     }
 }

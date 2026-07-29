@@ -336,20 +336,15 @@ else
 
     private void AgregarAlCarrito(Producto p)
     {
+        // Advertencia si no hay stock pero permite continuar
         if (p.Stock <= 0)
         {
-            mensajeError = $"⚠️ {p.Nombre} no tiene stock disponible.";
-            return;
+            mensajeError = $"⚠️ {p.Nombre} sin stock — se agregará pero quedará en negativo.";
         }
 
         var existente = carrito.FirstOrDefault(i => i.ProductoId == p.Id);
         if (existente != null)
         {
-            if (existente.Cantidad >= p.Stock)
-            {
-                mensajeError = $"⚠️ Solo hay {p.Stock} unidades de {p.Nombre}.";
-                return;
-            }
             existente.Cantidad++;
         }
         else
@@ -365,7 +360,6 @@ else
 
         productosBusqueda = null;
         codigoBusqueda = string.Empty;
-        mensajeError = null;
     }
 
     private void CambiarCantidad(DetalleVenta item, ChangeEventArgs e)

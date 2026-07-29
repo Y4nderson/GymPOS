@@ -6,11 +6,11 @@ namespace GymPOS.Services
 {
     public class DashboardService
     {
-        private readonly AppDbContext _context;
+        private readonly IDbContextFactory<AppDbContext> _contextFactory;
 
-        public DashboardService(AppDbContext context)
+        public DashboardService(IDbContextFactory<AppDbContext> contextFactory)
         {
-            _context = context;
+            _contextFactory = contextFactory;
         }
 
         private string NombreProducto(string tipo, string marca, string descripcion, string? capacidad)
@@ -18,42 +18,39 @@ namespace GymPOS.Services
 
         public async Task<decimal> GetVentasTotalesHoyAsync()
         {
+            using var ctx = await _contextFactory.CreateDbContextAsync();
             var hoy = DateTime.Now.Date;
-            return await _context.Ventas
-                .Where(v => v.Fecha.Date == hoy)
-                .SumAsync(v => v.Total);
+            return await ctx.Ventas.Where(v => v.Fecha.Date == hoy).SumAsync(v => v.Total);
         }
 
         public async Task<int> GetProductosVendidosHoyAsync()
         {
+            using var ctx = await _contextFactory.CreateDbContextAsync();
             var hoy = DateTime.Now.Date;
-            return await _context.DetallesVenta
-                .Where(d => d.Venta.Fecha.Date == hoy)
-                .SumAsync(d => d.Cantidad);
+            return await ctx.DetallesVenta.Where(d => d.Venta.Fecha.Date == hoy).SumAsync(d => d.Cantidad);
         }
 
         public async Task<decimal> GetVentasTotalesMesAsync()
         {
+            using var ctx = await _contextFactory.CreateDbContextAsync();
             var inicio = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1);
-            return await _context.Ventas
-                .Where(v => v.Fecha >= inicio)
-                .SumAsync(v => v.Total);
+            return await ctx.Ventas.Where(v => v.Fecha >= inicio).SumAsync(v => v.Total);
         }
 
         public async Task<decimal> GetVentasMesAnteriorAsync()
         {
+            using var ctx = await _contextFactory.CreateDbContextAsync();
             var mesAnterior = DateTime.Now.AddMonths(-1);
             var inicio = new DateTime(mesAnterior.Year, mesAnterior.Month, 1);
             var fin = inicio.AddMonths(1);
-            return await _context.Ventas
-                .Where(v => v.Fecha >= inicio && v.Fecha < fin)
-                .SumAsync(v => v.Total);
+            return await ctx.Ventas.Where(v => v.Fecha >= inicio && v.Fecha < fin).SumAsync(v => v.Total);
         }
 
         public async Task<string> GetProductoMasVendidoHoyAsync()
         {
+            using var ctx = await _contextFactory.CreateDbContextAsync();
             var hoy = DateTime.Now.Date;
-            var detalles = await _context.DetallesVenta
+            var detalles = await ctx.DetallesVenta
                 .Include(d => d.Producto)
                 .Where(d => d.Venta.Fecha.Date == hoy)
                 .ToListAsync();
@@ -79,15 +76,24 @@ namespace GymPOS.Services
 
         public async Task<int> GetProductosBajoStockAsync()
         {
-            return await _context.Productos
+            using var ctx = await _contextFactory.CreateDbContextAsync();
+            return await ctx.Productos.Where(p => p.Activo && p.Stock <= p.StockMinimo).CountAsync();
+        }
+
+        public async Task<List<Producto>> GetProductosStockBajoOSinStockAsync()
+        {
+            using var ctx = await _contextFactory.CreateDbContextAsync();
+            return await ctx.Productos
                 .Where(p => p.Activo && p.Stock <= p.StockMinimo)
-                .CountAsync();
+                .OrderBy(p => p.Stock)
+                .ToListAsync();
         }
 
         public async Task<List<(string Nombre, int Cantidad, decimal Total)>> GetTop5MasVendidosMesAsync()
         {
+            using var ctx = await _contextFactory.CreateDbContextAsync();
             var inicio = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1);
-            var detalles = await _context.DetallesVenta
+            var detalles = await ctx.DetallesVenta
                 .Include(d => d.Producto)
                 .Where(d => d.Venta.Fecha >= inicio)
                 .ToListAsync();
@@ -110,8 +116,9 @@ namespace GymPOS.Services
 
         public async Task<List<(string Nombre, int Cantidad)>> GetTop5MenosVendidosMesAsync()
         {
+            using var ctx = await _contextFactory.CreateDbContextAsync();
             var inicio = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1);
-            var detalles = await _context.DetallesVenta
+            var detalles = await ctx.DetallesVenta
                 .Include(d => d.Producto)
                 .Where(d => d.Venta.Fecha >= inicio)
                 .ToListAsync();
@@ -133,8 +140,9 @@ namespace GymPOS.Services
 
         public async Task<Dictionary<string, decimal>> GetVentasPorMetodoMesAsync()
         {
+            using var ctx = await _contextFactory.CreateDbContextAsync();
             var inicio = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1);
-            var result = await _context.Ventas
+            var result = await ctx.Ventas
                 .Where(v => v.Fecha >= inicio)
                 .GroupBy(v => v.MetodoPago)
                 .Select(g => new { Metodo = g.Key, Total = g.Sum(v => v.Total) })
@@ -144,8 +152,9 @@ namespace GymPOS.Services
 
         public async Task<List<(string Dia, decimal Total)>> GetVentasUltimos7DiasAsync()
         {
+            using var ctx = await _contextFactory.CreateDbContextAsync();
             var inicio = DateTime.Now.Date.AddDays(-6);
-            var ventas = await _context.Ventas
+            var ventas = await ctx.Ventas
                 .Where(v => v.Fecha.Date >= inicio)
                 .GroupBy(v => v.Fecha.Date)
                 .Select(g => new { Dia = g.Key, Total = g.Sum(v => v.Total) })
@@ -164,7 +173,8 @@ namespace GymPOS.Services
 
         public async Task<List<Producto>> GetProductosBajoStockListAsync()
         {
-            return await _context.Productos
+            using var ctx = await _contextFactory.CreateDbContextAsync();
+            return await ctx.Productos
                 .Where(p => p.Activo && p.Stock <= p.StockMinimo)
                 .OrderBy(p => p.Stock)
                 .Take(5)
@@ -173,13 +183,14 @@ namespace GymPOS.Services
 
         public async Task<bool> CajaAbiertaAsync()
         {
+            using var ctx = await _contextFactory.CreateDbContextAsync();
             var hoy = DateTime.Now.Date;
-            var apertura = await _context.MovimientosCaja
+            var apertura = await ctx.MovimientosCaja
                 .Where(m => m.Fecha.Date == hoy && m.Tipo == "Apertura")
                 .OrderByDescending(m => m.Fecha)
                 .FirstOrDefaultAsync();
             if (apertura == null) return false;
-            return !await _context.MovimientosCaja
+            return !await ctx.MovimientosCaja
                 .AnyAsync(m => m.Fecha.Date == hoy && m.Tipo == "CierreDefinitivo" && m.Fecha > apertura.Fecha);
         }
     }

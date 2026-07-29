@@ -490,5 +490,229 @@ namespace GymPOS.Services
             wb.SaveAs(ms);
             return ms.ToArray();
         }
+
+
+
+        // Reporte por rango de fechas
+        public async Task<byte[]> GenerarReportePorRangoAsync(DateTime desde, DateTime hasta)
+        {
+            var desdeDate = desde.Date;
+            var hastaDate = hasta.Date;
+
+            var ventas = await _context.Ventas
+                .Include(v => v.Detalles).ThenInclude(d => d.Producto)
+                .Where(v => v.Fecha.Date >= desdeDate && v.Fecha.Date <= hastaDate)
+                .OrderBy(v => v.Fecha)
+                .ToListAsync();
+
+            var entradas = await _context.EntradasProducto
+                .Include(e => e.Producto)
+                .Where(e => e.Fecha.Date >= desdeDate && e.Fecha.Date <= hastaDate)
+                .OrderBy(e => e.Fecha)
+                .ToListAsync();
+
+            var productos = await _context.Productos
+                .Where(p => p.Activo)
+                .OrderBy(p => p.Marca)
+                .ToListAsync();
+
+            var movimientos = await _context.MovimientosCaja
+                .Where(m => m.Fecha.Date >= desdeDate && m.Fecha.Date <= hastaDate)
+                .OrderBy(m => m.Fecha)
+                .ToListAsync();
+
+            var colorVerde = XLColor.FromHtml("#1B5E20");
+            var colorGris = XLColor.FromHtml("#F5F5F5");
+            var colorRojo = XLColor.FromHtml("#C62828");
+            var colorAzul = XLColor.FromHtml("#0D47A1");
+
+            using var wb = new XLWorkbook();
+
+            // ===== HOJA 1: RESUMEN POR DÍA =====
+            var ws1 = wb.Worksheets.Add("Resumen por Día");
+            ws1.Cell(1, 1).Value = "INLINE GYM — REPORTE POR RANGO";
+            ws1.Cell(1, 1).Style.Font.Bold = true;
+            ws1.Cell(1, 1).Style.Font.FontSize = 16;
+            ws1.Cell(1, 1).Style.Font.FontColor = colorVerde;
+            ws1.Range("A1:G1").Merge();
+            ws1.Cell(2, 1).Value = $"Período: {desdeDate:dd/MM/yyyy} al {hastaDate:dd/MM/yyyy}";
+            ws1.Cell(2, 1).Style.Font.Italic = true;
+            ws1.Cell(3, 1).Value = $"Generado: {DateTime.Now:dd/MM/yyyy hh:mm tt}";
+            ws1.Cell(3, 1).Style.Font.Italic = true;
+
+            ws1.Cell(5, 1).Value = "Fecha";
+            ws1.Cell(5, 2).Value = "Efectivo";
+            ws1.Cell(5, 3).Value = "SINPE";
+            ws1.Cell(5, 4).Value = "Tarjeta";
+            ws1.Cell(5, 5).Value = "Total Ventas";
+            ws1.Cell(5, 6).Value = "Egresos";
+            ws1.Cell(5, 7).Value = "Neto";
+            ws1.Row(5).Style.Font.Bold = true;
+            ws1.Row(5).Style.Fill.BackgroundColor = colorVerde;
+            ws1.Row(5).Style.Font.FontColor = XLColor.White;
+
+            var fechas = Enumerable.Range(0, (hastaDate - desdeDate).Days + 1)
+                .Select(i => desdeDate.AddDays(i)).ToList();
+
+            int rowR = 6;
+            decimal gtEfectivo = 0, gtSinpe = 0, gtTarjeta = 0, gtVentas = 0, gtEgresos = 0;
+            foreach (var f in fechas)
+            {
+                var ventasDia = ventas.Where(v => v.Fecha.Date == f).ToList();
+                var movsDia = movimientos.Where(m => m.Fecha.Date == f).ToList();
+                var ef = ventasDia.Where(v => v.MetodoPago == "Efectivo").Sum(v => v.Total);
+                var sp = ventasDia.Where(v => v.MetodoPago == "SINPE Móvil").Sum(v => v.Total);
+                var tj = ventasDia.Where(v => v.MetodoPago == "Tarjeta").Sum(v => v.Total);
+                var tot = ventasDia.Sum(v => v.Total);
+                var egr = Math.Abs(movsDia.Where(m => m.Tipo == "Egreso").Sum(m => m.Monto));
+                gtEfectivo += ef; gtSinpe += sp; gtTarjeta += tj; gtVentas += tot; gtEgresos += egr;
+
+                ws1.Cell(rowR, 1).Value = f.ToString("ddd dd/MM");
+                ws1.Cell(rowR, 2).Value = ef; ws1.Cell(rowR, 2).Style.NumberFormat.Format = "₡#,##0";
+                ws1.Cell(rowR, 3).Value = sp; ws1.Cell(rowR, 3).Style.NumberFormat.Format = "₡#,##0";
+                ws1.Cell(rowR, 4).Value = tj; ws1.Cell(rowR, 4).Style.NumberFormat.Format = "₡#,##0";
+                ws1.Cell(rowR, 5).Value = tot; ws1.Cell(rowR, 5).Style.NumberFormat.Format = "₡#,##0";
+                ws1.Cell(rowR, 5).Style.Font.Bold = true;
+                ws1.Cell(rowR, 6).Value = -egr; ws1.Cell(rowR, 6).Style.NumberFormat.Format = "₡#,##0";
+                ws1.Cell(rowR, 6).Style.Font.FontColor = colorRojo;
+                ws1.Cell(rowR, 7).Value = tot - egr; ws1.Cell(rowR, 7).Style.NumberFormat.Format = "₡#,##0";
+                ws1.Cell(rowR, 7).Style.Font.FontColor = colorVerde;
+                if (rowR % 2 == 0) ws1.Range(rowR, 1, rowR, 7).Style.Fill.BackgroundColor = colorGris;
+                rowR++;
+            }
+
+            // Totales
+            ws1.Cell(rowR, 1).Value = "TOTAL";
+            ws1.Cell(rowR, 2).Value = gtEfectivo; ws1.Cell(rowR, 2).Style.NumberFormat.Format = "₡#,##0";
+            ws1.Cell(rowR, 3).Value = gtSinpe; ws1.Cell(rowR, 3).Style.NumberFormat.Format = "₡#,##0";
+            ws1.Cell(rowR, 4).Value = gtTarjeta; ws1.Cell(rowR, 4).Style.NumberFormat.Format = "₡#,##0";
+            ws1.Cell(rowR, 5).Value = gtVentas; ws1.Cell(rowR, 5).Style.NumberFormat.Format = "₡#,##0";
+            ws1.Cell(rowR, 6).Value = -gtEgresos; ws1.Cell(rowR, 6).Style.NumberFormat.Format = "₡#,##0";
+            ws1.Cell(rowR, 7).Value = gtVentas - gtEgresos; ws1.Cell(rowR, 7).Style.NumberFormat.Format = "₡#,##0";
+            ws1.Row(rowR).Style.Font.Bold = true;
+            ws1.Row(rowR).Style.Fill.BackgroundColor = XLColor.FromHtml("#E8F5E9");
+            ws1.Columns().AdjustToContents();
+
+            // ===== HOJA 2: VENTAS DETALLADAS =====
+            var ws2 = wb.Worksheets.Add("Detalle de Ventas");
+            ws2.Cell(1, 1).Value = "DETALLE DE VENTAS DEL PERÍODO";
+            ws2.Cell(1, 1).Style.Font.Bold = true;
+            ws2.Cell(1, 1).Style.Font.FontSize = 14;
+            ws2.Cell(1, 1).Style.Font.FontColor = colorVerde;
+            ws2.Range("A1:G1").Merge();
+
+            ws2.Cell(3, 1).Value = "Fecha";
+            ws2.Cell(3, 2).Value = "Hora";
+            ws2.Cell(3, 3).Value = "Producto";
+            ws2.Cell(3, 4).Value = "Cantidad";
+            ws2.Cell(3, 5).Value = "Precio Unit.";
+            ws2.Cell(3, 6).Value = "Subtotal";
+            ws2.Cell(3, 7).Value = "Método Pago";
+            ws2.Row(3).Style.Font.Bold = true;
+            ws2.Row(3).Style.Fill.BackgroundColor = colorVerde;
+            ws2.Row(3).Style.Font.FontColor = XLColor.White;
+
+            int r2 = 4;
+            foreach (var venta in ventas)
+            {
+                foreach (var d in venta.Detalles)
+                {
+                    ws2.Cell(r2, 1).Value = venta.Fecha.ToString("dd/MM/yyyy");
+                    ws2.Cell(r2, 2).Value = venta.Fecha.ToString("hh:mm tt");
+                    ws2.Cell(r2, 3).Value = d.Producto?.Nombre;
+                    ws2.Cell(r2, 4).Value = d.Cantidad;
+                    ws2.Cell(r2, 5).Value = d.PrecioUnitario; ws2.Cell(r2, 5).Style.NumberFormat.Format = "₡#,##0";
+                    ws2.Cell(r2, 6).Value = d.Subtotal; ws2.Cell(r2, 6).Style.NumberFormat.Format = "₡#,##0";
+                    ws2.Cell(r2, 7).Value = venta.MetodoPago;
+                    if (r2 % 2 == 0) ws2.Range(r2, 1, r2, 7).Style.Fill.BackgroundColor = colorGris;
+                    r2++;
+                }
+            }
+            r2++;
+            ws2.Cell(r2, 5).Value = "TOTAL"; ws2.Cell(r2, 5).Style.Font.Bold = true;
+            ws2.Cell(r2, 6).Value = ventas.Sum(v => v.Total);
+            ws2.Cell(r2, 6).Style.NumberFormat.Format = "₡#,##0";
+            ws2.Cell(r2, 6).Style.Font.Bold = true;
+            ws2.Columns().AdjustToContents();
+
+            // ===== HOJA 3: PRODUCTOS MÁS VENDIDOS =====
+            var ws3 = wb.Worksheets.Add("Productos más Vendidos");
+            ws3.Cell(1, 1).Value = "RANKING DE PRODUCTOS DEL PERÍODO";
+            ws3.Cell(1, 1).Style.Font.Bold = true;
+            ws3.Cell(1, 1).Style.Font.FontSize = 14;
+            ws3.Cell(1, 1).Style.Font.FontColor = colorVerde;
+            ws3.Range("A1:D1").Merge();
+
+            ws3.Cell(3, 1).Value = "#";
+            ws3.Cell(3, 2).Value = "Producto";
+            ws3.Cell(3, 3).Value = "Unidades Vendidas";
+            ws3.Cell(3, 4).Value = "Total ₡";
+            ws3.Row(3).Style.Font.Bold = true;
+            ws3.Row(3).Style.Fill.BackgroundColor = colorVerde;
+            ws3.Row(3).Style.Font.FontColor = XLColor.White;
+
+            var ranking = ventas
+                .SelectMany(v => v.Detalles)
+                .GroupBy(d => d.Producto?.Nombre ?? "Desconocido")
+                .Select(g => new { Nombre = g.Key, Unidades = g.Sum(d => d.Cantidad), Total = g.Sum(d => d.Subtotal) })
+                .OrderByDescending(x => x.Unidades)
+                .ToList();
+
+            int r3 = 4;
+            foreach (var item in ranking)
+            {
+                ws3.Cell(r3, 1).Value = r3 - 3;
+                ws3.Cell(r3, 2).Value = item.Nombre;
+                ws3.Cell(r3, 3).Value = item.Unidades;
+                ws3.Cell(r3, 4).Value = item.Total; ws3.Cell(r3, 4).Style.NumberFormat.Format = "₡#,##0";
+                if (r3 % 2 == 0) ws3.Range(r3, 1, r3, 4).Style.Fill.BackgroundColor = colorGris;
+                r3++;
+            }
+            ws3.Columns().AdjustToContents();
+
+            // ===== HOJA 4: ENTRADAS =====
+            var ws4 = wb.Worksheets.Add("Entradas de Producto");
+            ws4.Cell(1, 1).Value = "ENTRADAS DEL PERÍODO";
+            ws4.Cell(1, 1).Style.Font.Bold = true;
+            ws4.Cell(1, 1).Style.Font.FontSize = 14;
+            ws4.Cell(1, 1).Style.Font.FontColor = colorVerde;
+            ws4.Range("A1:F1").Merge();
+
+            ws4.Cell(3, 1).Value = "Fecha";
+            ws4.Cell(3, 2).Value = "Hora";
+            ws4.Cell(3, 3).Value = "Producto";
+            ws4.Cell(3, 4).Value = "Cantidad";
+            ws4.Cell(3, 5).Value = "Proveedor";
+            ws4.Cell(3, 6).Value = "Costo Factura";
+            ws4.Row(3).Style.Font.Bold = true;
+            ws4.Row(3).Style.Fill.BackgroundColor = colorVerde;
+            ws4.Row(3).Style.Font.FontColor = XLColor.White;
+
+            int r4 = 4;
+            foreach (var e in entradas)
+            {
+                ws4.Cell(r4, 1).Value = e.Fecha.ToString("dd/MM/yyyy");
+                ws4.Cell(r4, 2).Value = e.Fecha.ToString("hh:mm tt");
+                ws4.Cell(r4, 3).Value = e.Producto?.Nombre;
+                ws4.Cell(r4, 4).Value = e.Cantidad;
+                ws4.Cell(r4, 5).Value = e.Proveedor ?? "-";
+                ws4.Cell(r4, 6).Value = e.CostoFactura; ws4.Cell(r4, 6).Style.NumberFormat.Format = "₡#,##0";
+                if (r4 % 2 == 0) ws4.Range(r4, 1, r4, 6).Style.Fill.BackgroundColor = colorGris;
+                r4++;
+            }
+            if (entradas.Any())
+            {
+                r4++;
+                ws4.Cell(r4, 5).Value = "TOTAL"; ws4.Cell(r4, 5).Style.Font.Bold = true;
+                ws4.Cell(r4, 6).Value = entradas.Sum(e => e.CostoFactura);
+                ws4.Cell(r4, 6).Style.NumberFormat.Format = "₡#,##0";
+                ws4.Cell(r4, 6).Style.Font.Bold = true;
+            }
+            ws4.Columns().AdjustToContents();
+
+            using var ms = new MemoryStream();
+            wb.SaveAs(ms);
+            return ms.ToArray();
+        }
     }
 }
